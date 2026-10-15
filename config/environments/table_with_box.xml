@@ -23,6 +23,8 @@
     <!-- Table next to the robot (negative y side), top surface at z = 0.4 m -->
     <body name="table" pos="0.3 -1.0 0.2">
       <geom name="table_top" type="box" size="0.3 0.5 0.2" rgba="0.55 0.4 0.3 1"/>
+      <!-- Volume of the touch sensor: contacts on the top surface of the table -->
+      <site name="table_top_surface" type="box" pos="0 0 0.2" size="0.3 0.5 0.01" rgba="0 0 0 0" group="4"/>
     </body>
 
     <!-- Free box lying on the table -->
@@ -31,4 +33,11 @@
       <geom name="box" type="box" size="0.05 0.05 0.05" mass="0.5" rgba="0.8 0.2 0.2 1"/>
     </body>
   </worldbody>
+
+  <!-- MuJoCo sensors: published by the simulator on <topic_namespace>/mujoco_sensors/<name> -->
+  <sensor>
+    <framepos name="box_position" objtype="body" objname="box"/>
+    <framequat name="box_orientation" objtype="body" objname="box"/>
+    <touch name="table_top_touch" site="table_top_surface"/>
+  </sensor>
 </mujoco>

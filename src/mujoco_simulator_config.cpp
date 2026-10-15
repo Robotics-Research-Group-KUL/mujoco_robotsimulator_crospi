@@ -20,6 +20,7 @@
 
 #include <cmath>
 #include <filesystem>
+#include <set>
 #include <stdexcept>
 
 #include <fmt/format.h>
@@ -268,11 +269,70 @@ SimulatorConfig parse_config(const Json::Value& config, std::shared_ptr<etasl::J
         fail("'tcp_link' is required when Cartesian feedback is requested.");
     }
 
-    // ---------------- visualization ----------------
+    // ---------------- ROS 2 interface ----------------
+    c.ros_node_name = read_string(config, "ros_node_name");
+
+    const Json::Value sp = require(config, "sensor_publishing");
+    SensorPublishingConfig& pub = c.sensor_publishing;
+    pub.topic_namespace = read_string(sp, "topic_namespace");
+    pub.publish_period = read_number(require(sp, "publish_period"), "sensor_publishing/publish_period");
+    if (pub.publish_period <= 0.0) {
+        fail("parameter 'sensor_publishing/publish_period' must be strictly positive.");
+    }
+    if (sp.isMember("sensors")) {
+        const Json::Value& list = sp["sensors"];
+        if (!list.isArray()) {
+            fail("parameter 'sensor_publishing/sensors' must be an array of sensor names.");
+        }
+        std::set<std::string> seen;
+        for (const auto& item : list) {
+            if (!item.isString()) {
+                fail("parameter 'sensor_publishing/sensors' must only contain strings.");
+            }
+            const std::string sensor = item.asString();
+            if (!seen.insert(sensor).second) {
+                fail(fmt::format("sensor '{}' is listed twice in 'sensor_publishing/sensors'.", sensor));
+            }
+            if (sensor == SENSOR_JOINT_STATE) {
+                pub.joint_state = true;
+            } else if (sensor == SENSOR_TCP_POSE) {
+                pub.tcp_pose = true;
+            } else if (sensor == SENSOR_TCP_TWIST) {
+                pub.tcp_twist = true;
+            } else if (sensor == SENSOR_TCP_WRENCH) {
+                pub.tcp_wrench = true;
+            } else if (sensor == SENSOR_BASE_POSE) {
+                pub.base_pose = true;
+            } else if (sensor == SENSOR_BASE_TWIST) {
+                pub.base_twist = true;
+            } else {
+                pub.mujoco_sensors.push_back(sensor);  // validated against the model once it is built
+            }
+        }
+        if ((pub.tcp_pose || pub.tcp_twist) && (!c.base_link || !c.tcp_link)) {
+            fail("'base_link' and 'tcp_link' are required to publish tcp_pose or tcp_twist.");
+        }
+        if (pub.tcp_wrench && !c.tcp_link) {
+            fail("'tcp_link' is required to publish tcp_wrench.");
+        }
+        if ((pub.base_pose || pub.base_twist) && !c.base_link) {
+            fail("'base_link' is required to publish base_pose or base_twist.");
+        }
+    } else {
+        // All the available sensors: the ones that need a link are available if the link is configured.
+        pub.joint_state = true;
+        pub.tcp_pose = pub.tcp_twist = (c.base_link && c.tcp_link);
+        pub.tcp_wrench = c.tcp_link.has_value();
+        pub.base_pose = pub.base_twist = c.base_link.has_value();
+        pub.all_mujoco_sensors = true;
+    }
+
     if (config.isMember("visualization")) {
         const Json::Value& v = config["visualization"];
         VisualizationConfig vis;
-        vis.node_name = read_string(v, "node_name");
+        if (v.isMember("node_name")) {
+            fail("'visualization/node_name' was replaced by the top-level parameter 'ros_node_name'.");
+        }
         vis.model_topic = read_string(v, "model_topic");
         vis.state_topic = read_string(v, "state_topic");
         vis.publish_period = read_number(require(v, "publish_period"), "visualization/publish_period");

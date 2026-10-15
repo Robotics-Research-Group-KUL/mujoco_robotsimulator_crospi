@@ -42,8 +42,13 @@
                     "name_expr_cartesian_pos": "tcp_pos",
                     "name_expr_cartesian_quat": "tcp_quat",
                     "name_expr_cartesian_twist": "tcp_twist",
+                    "ros_node_name": "mujoco_robotsimulator",
+                    "sensor_publishing": {
+                        "topic_namespace": "/mujoco_sim/sensors",
+                        "publish_period": 0.01,
+                        "sensors": ["joint_state", "tcp_pose", "tcp_twist"]
+                    },
                     "visualization": {
-                        "node_name": "mujoco_robotsimulator",
                         "model_topic": "/mujoco_sim/model",
                         "state_topic": "/mujoco_sim/state",
                         "publish_period": 0.033

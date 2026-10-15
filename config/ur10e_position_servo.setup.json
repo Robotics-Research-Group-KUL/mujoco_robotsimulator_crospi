@@ -53,8 +53,12 @@
                     "name_expr_base_pos": "base_pos",
                     "name_expr_base_quat": "base_quat",
                     "name_expr_base_twist": "base_twist",
+                    "ros_node_name": "mujoco_robotsimulator",
+                    "sensor_publishing": {
+                        "topic_namespace": "/mujoco_sim/sensors",
+                        "publish_period": 0.01
+                    },
                     "visualization": {
-                        "node_name": "mujoco_robotsimulator",
                         "model_topic": "/mujoco_sim/model",
                         "state_topic": "/mujoco_sim/state",
                         "publish_period": 0.033

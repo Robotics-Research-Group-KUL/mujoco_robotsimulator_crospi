@@ -43,10 +43,36 @@ enum class ControlMode {
  * @brief Optional publication of the simulation for visualization (see scripts/mujoco_viewer.py).
  */
 struct VisualizationConfig {
-    std::string node_name;     ///< Name of the ROS 2 node created by the simulator
     std::string model_topic;   ///< Topic (transient local) on which the compiled model is published once as MJB binary
     std::string state_topic;   ///< Topic on which [time, qpos...] is published
     double publish_period;     ///< Period in seconds of the state publication
+};
+
+/** Names of the built-in sensors that can be published (besides the sensors defined in the MJCF environment). */
+inline const char* SENSOR_JOINT_STATE = "joint_state";
+inline const char* SENSOR_TCP_POSE = "tcp_pose";
+inline const char* SENSOR_TCP_TWIST = "tcp_twist";
+inline const char* SENSOR_TCP_WRENCH = "tcp_wrench";
+inline const char* SENSOR_BASE_POSE = "base_pose";
+inline const char* SENSOR_BASE_TWIST = "base_twist";
+
+/**
+ * @brief Publication of the sensor values on ROS 2 topics (see ros_publisher.hpp for the topics and messages).
+ */
+struct SensorPublishingConfig {
+    std::string topic_namespace;  ///< Prefix of all the sensor topics
+    double publish_period;        ///< Period in seconds of the publication
+
+    // Built-in sensors to publish (resolved from the "sensors" list, or all available ones if the list is omitted)
+    bool joint_state = false;
+    bool tcp_pose = false;
+    bool tcp_twist = false;
+    bool tcp_wrench = false;
+    bool base_pose = false;
+    bool base_twist = false;
+
+    bool all_mujoco_sensors = false;            ///< true if the "sensors" list is omitted
+    std::vector<std::string> mujoco_sensors;    ///< MuJoCo sensors (MJCF) explicitly listed in "sensors"
 };
 
 /**
@@ -111,6 +137,10 @@ struct SimulatorConfig {
     std::optional<std::string> tcp_link;
 
     FeedbackRequest feedback;
+
+    // ROS 2 interface
+    std::string ros_node_name;                      ///< Node created by the simulator for publishing
+    SensorPublishingConfig sensor_publishing;
     std::optional<VisualizationConfig> visualization;
 
     /** Number of physics steps executed every update() call: periodicity / simulation_timestep */

@@ -216,27 +216,6 @@ mjModel* build_model(const SimulatorConfig& config)
         }
     }
 
-    // ------------------------------------------------------------------ force/torque sensor at the tcp
-    if (config.feedback.cartesian_wrench) {
-        mjsBody* tcp = mjs_findBody(scene.get(), config.tcp_link->c_str());
-        mjsSite* site = mjs_addSite(tcp, nullptr);
-        mjs_setName(site->element, FT_SITE_NAME);
-        site->size[0] = 0.005;
-        site->group = 4;  // hidden by default in the viewer
-
-        mjsSensor* force = mjs_addSensor(scene.get());
-        mjs_setName(force->element, FT_FORCE_SENSOR_NAME);
-        force->type = mjSENS_FORCE;
-        force->objtype = mjOBJ_SITE;
-        mjs_setString(force->objname, FT_SITE_NAME);
-
-        mjsSensor* torque = mjs_addSensor(scene.get());
-        mjs_setName(torque->element, FT_TORQUE_SENSOR_NAME);
-        torque->type = mjSENS_TORQUE;
-        torque->objtype = mjOBJ_SITE;
-        mjs_setString(torque->objname, FT_SITE_NAME);
-    }
-
     // ------------------------------------------------------------------ compile
     // A first compilation provides the weld groups needed to exclude the contacts between adjacent robot links.
     mjModel* m = mj_compile(scene.get(), nullptr);

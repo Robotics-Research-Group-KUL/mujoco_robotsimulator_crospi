@@ -27,10 +27,6 @@
 namespace etasl {
 namespace mujoco_sim {
 
-/** Name of the site added at tcp_link to measure the wrench with MuJoCo force/torque sensors. */
-inline const char* FT_SITE_NAME = "crospi_ft_site";
-inline const char* FT_FORCE_SENSOR_NAME = "crospi_ft_force";
-inline const char* FT_TORQUE_SENSOR_NAME = "crospi_ft_torque";
 inline const char* GROUND_PLANE_NAME = "crospi_ground_plane";
 
 /**
@@ -38,7 +34,7 @@ inline const char* GROUND_PLANE_NAME = "crospi_ground_plane";
  *   1. the URDF is parsed (package:// and relative mesh paths are resolved, fixed links are kept as bodies),
  *   2. the joint dynamics overrides and gravity compensation are applied to the robot,
  *   3. the robot is attached to the world of the environment MJCF (or an empty world) at the base pose,
- *   4. the ground plane, physics options and force/torque sensors are added,
+ *   4. the ground plane, physics options and contact exclusions are added,
  *   5. the scene is compiled.
  *
  * @return the compiled model, owned by the caller (free with mj_deleteModel).

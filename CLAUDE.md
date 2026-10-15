@@ -26,24 +26,31 @@ done
 # end-to-end: crospi_node + BeTFSM tasks (expect "Finished with outcome SUCCEED")
 /opt/ros2_crospi_ws/install/crospi_core/lib/crospi_core/crospi_node --ros-args \
   -p config_file:='$[mujoco_robotsimulator_crospi]/config/ur10e_position_servo.setup.json' -p simulation:=true &
-ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[betfsm_demos]/tasks/betfsm_demos_tasks.json' \
+ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_robotsimulator_crospi]/betfsm_tasks_examples/betfsm_demos_tasks.json' \
   --tasks MoveHome --repetitions 1 --tick-frequency 100 --publish-frequency 5
 ```
 
 - Kill background `crospi_node`s by PID afterwards: `timeout ... ros2 run crospi_node` does NOT kill the node
   process, and two nodes with the same name make the BeTFSM tasks CANCEL. Check with `pgrep -af crospi_node`.
-- The `sine` task of `betfsm_demos` runs forever (`execution_time: -10`); use `MoveHome` for pass/fail tests.
+- `betfsm_tasks_examples/betfsm_demos_tasks.json` is a copy of the betfsm_demos task list with a modified `MoveHome`
+  (robot above the table, so `sine` touches it). `sine` runs forever (`execution_time: -10`); use `MoveHome` for
+  pass/fail tests. `MovingDown`/`MovingUp` need crospi_application_template (not installed).
+- README.md is the user-facing reference (quick start, frames table, troubleshooting): keep it in sync.
 - `mujoco_viewer.py` opens a GUI window; test its data path headlessly by subscribing to the topics instead.
 
 ## Code map
 
 - `src/mujoco_simulator_config.cpp`: parses and validates the JSON into `SimulatorConfig` (throws `std::runtime_error`).
 - `src/mujoco_scene_builder.cpp`: URDF → `mjSpec`, attaches it to the environment MJCF (or empty world) through a
-  frame at the base pose, adds ground plane, physics options, F/T sensors, contact excludes, compiles.
+  frame at the base pose, adds ground plane, physics options, contact excludes, compiles.
 - `src/mujoco_robotsimulator_crospi.cpp`: the plugin. `update()` runs on crospi's driver thread every `periodicity`
   and performs all MuJoCo computation synchronously (`substeps = periodicity / simulation_timestep`).
-- `src/visualization_publisher.cpp`: own rclcpp node + executor thread; model as MJB (transient local), state
-  `[time, qpos...]`. The update thread only `try_lock`s a buffer (never blocks).
+- `src/ros_publisher.cpp`: the simulator's rclcpp node (`ros_node_name`, always created) + executor thread. Publishes
+  the sensors (`sensor_publishing`, standard msgs, one timer) and optionally the visualization (model as MJB,
+  transient local; state `[time, qpos...]`). The update thread passes `Measurements` + `sensordata` + `qpos` through
+  a `try_lock`ed buffer (never blocks).
+- `Measurements` (in `ros_publisher.hpp`) is computed once per update by `compute_measurements()` and used both by
+  `write_feedback()` (crospi) and the publisher; the `need_*_` flags are the union of feedback and publication needs.
 - `src/test_mujoco_robotsimulator.cpp`, `scripts/mujoco_viewer.py`, `scripts/run_crospi_tasks.py`: test executables.
 
 ## Project rules
@@ -51,7 +58,8 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[betfsm_
 - **No hidden parameters** (explicit user requirement). Every value affecting the simulation comes from the JSON
   config; executables take only required arguments. Do not add C++ defaults, argparse defaults or hard-coded tuning
   constants. Optional config keys may only enable optional features. Reject keys that do not apply to the selected
-  `control_mode`.
+  `control_mode`. Sole explicit exception (user request): omitting `sensor_publishing/sensors` publishes all
+  available sensors.
 - **Never put `default` in the JSON schema**: the crospi blackboard (`BlackBoard::process_and_validate`) inserts schema
   defaults for missing properties, which would silently enable features / hide missing parameters. Use `examples`.
 - Keep the schema, `parse_config`, the README parameter table and the example `config/*.setup.json` in sync.
@@ -79,10 +87,15 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[betfsm_
   reporting Cartesian/wrench/torque feedback.
 - Torques are applied via `qfrc_applied` (no MuJoCo actuators); gravity compensation via body `gravcomp` (shows up in
   `qfrc_gravcomp`). Kinematic-mode torques come from `mj_inverse`.
-- MuJoCo force sensor = wrench of parent on child subtree, in site frame (verified: hanging 2 kg → +19.62 N).
+- The TCP wrench is NOT a MuJoCo force sensor: on the UR, `tool0`/`flange` have no geometry (all of it is in
+  `wrist_3_link`), so a sensor at `tool0` always read zero. `compute_tcp_wrench()` sums `mj_contactForce` over the
+  contacts of the end-effector bodies (weld group of `tcp_link` + descendants), shifted to the tcp origin, sign =
+  wrench the end effector exerts on the environment. `frame^T * f` = force of `geom[0]` on `geom[1]` (verified).
 - `mjsJoint::damping` is an array in 3.16 (`damping[0]` is the linear coefficient).
 - **crospi_node** constructs *all* entries of `robot/robotsimulators` (hence one setup file per mode), requires a
   top-level `"$defs": {}` and a `default_robot_specification`; it picks the plugin from the `is-<name>` key.
+- `ros2` CLI tools print `RTPS_TRANSPORT_SHM ... open_and_lock_file failed` in this environment; harmless (stale
+  Fast DDS shared-memory locks), messages still arrive.
 - `ROSRunner.run()` (betfsm_ros) re-parses `sys.argv`; strip the script's own arguments first. Pass `serve=False`
   to avoid its web server.
 - `config/urdf/ur10e.urdf` was generated with xacro (not installed system-wide) from `ur_description`

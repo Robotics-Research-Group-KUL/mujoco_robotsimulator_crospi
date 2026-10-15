@@ -40,7 +40,7 @@ const char* control_mode_name(mujoco_sim::ControlMode mode) {
     return "unknown";
 }
 
-robotdrivers::Vector3Field to_vector3(const mjtNum v[3]) {
+robotdrivers::Vector3Field to_vector3(const std::array<double, 3>& v) {
     robotdrivers::Vector3Field f{};
     f.x = static_cast<float>(v[0]);
     f.y = static_cast<float>(v[1]);
@@ -49,7 +49,7 @@ robotdrivers::Vector3Field to_vector3(const mjtNum v[3]) {
 }
 
 /** MuJoCo quaternion [w x y z] to crospi quaternion. */
-robotdrivers::QuaternionField to_quaternion(const mjtNum q[4]) {
+robotdrivers::QuaternionField to_quaternion(const std::array<double, 4>& q) {
     robotdrivers::QuaternionField f{};
     f.qw = static_cast<float>(q[0]);
     f.qx = static_cast<float>(q[1]);
@@ -58,12 +58,15 @@ robotdrivers::QuaternionField to_quaternion(const mjtNum q[4]) {
     return f;
 }
 
-/** MuJoCo 6D velocity [angular; linear] to crospi screw. */
-robotdrivers::ScrewField to_screw(const mjtNum angular[3], const mjtNum linear[3]) {
+robotdrivers::ScrewField to_screw(const std::array<double, 3>& linear, const std::array<double, 3>& angular) {
     robotdrivers::ScrewField f{};
     f.linear = to_vector3(linear);
     f.angular = to_vector3(angular);
     return f;
+}
+
+void copy3(std::array<double, 3>& dst, const mjtNum* src) {
+    std::copy(src, src + 3, dst.begin());
 }
 
 } // namespace
@@ -95,9 +98,28 @@ void mujoco_robotsimulator_crospi::construct(std::string robot_name,
     if (config_.tcp_link) {
         tcp_body_id_ = mj_name2id(m_, mjOBJ_BODY, config_.tcp_link->c_str());
     }
-    if (config_.feedback.cartesian_wrench) {
-        ft_force_adr_ = m_->sensor_adr[mj_name2id(m_, mjOBJ_SENSOR, mujoco_sim::FT_FORCE_SENSOR_NAME)];
-        ft_torque_adr_ = m_->sensor_adr[mj_name2id(m_, mjOBJ_SENSOR, mujoco_sim::FT_TORQUE_SENSOR_NAME)];
+    const auto& fb = config_.feedback;
+    const auto& pub = config_.sensor_publishing;
+    need_tau_ = fb.joint_torque || pub.joint_state;
+    need_tcp_pose_ = fb.cartesian_pos || fb.cartesian_quat || pub.tcp_pose;
+    need_tcp_twist_ = fb.cartesian_twist || pub.tcp_twist;
+    need_wrench_ = fb.cartesian_wrench || pub.tcp_wrench;
+    need_base_pose_ = fb.base_pos || fb.base_quat || pub.base_pose;
+    need_base_twist_ = fb.base_twist || pub.base_twist;
+
+    if (need_wrench_) {
+        // End effector: the rigid body group of tcp_link (bodies welded together, e.g. wrist_3_link, flange, tool0)
+        // and everything mounted after it (e.g. a gripper with its own joints).
+        const int root = m_->body_weldid[tcp_body_id_];
+        end_effector_body_.assign(m_->nbody, false);
+        for (int b = 1; b < m_->nbody; ++b) {
+            for (int a = b; a > 0; a = m_->body_parentid[a]) {
+                if (a == root) {
+                    end_effector_body_[b] = true;
+                    break;
+                }
+            }
+        }
     }
 
     const std::size_t n = config_.robot_joints.size();
@@ -107,6 +129,9 @@ void mujoco_robotsimulator_crospi::construct(std::string robot_name,
     joint_torque_.data.assign(n, 0.0f);
     q_ref_.assign(n, 0.0);
     tau_.assign(n, 0.0);
+    meas_.q.assign(n, 0.0);
+    meas_.qd.assign(n, 0.0);
+    meas_.tau.assign(n, 0.0);
     qvel_prev_.assign(n, 0.0);
 
     AvailableFeedback available_fb{};
@@ -123,9 +148,7 @@ void mujoco_robotsimulator_crospi::construct(std::string robot_name,
 
     constructPorts(n, available_fb); //Constructs all shared pointers and initialize data structures. Call after assigning available_feedback booleans.
 
-    if (config_.visualization) {
-        visualization_ = std::make_unique<mujoco_sim::VisualizationPublisher>(*config_.visualization, m_);
-    }
+    ros_publisher_ = std::make_unique<mujoco_sim::RosPublisher>(config_, m_);
 
     std::cout << fmt::format("Constructed MuJoCo robot simulator '{}' (MuJoCo {}): urdf={}, control_mode={}, "
                              "timestep={} s, {} physics steps per update, nq={}, nv={}, nbody={}, ngeom={}",
@@ -184,10 +207,9 @@ bool mujoco_robotsimulator_crospi::initialize()
                   << std::endl;
     }
 
+    compute_measurements();
     write_feedback();
-    if (visualization_) {
-        visualization_->store_state(d_);
-    }
+    ros_publisher_->store(d_, meas_);
     return true;
 }
 
@@ -211,11 +233,9 @@ void mujoco_robotsimulator_crospi::update(volatile std::atomic<bool>& /*stopFlag
         step_dynamic();
     }
 
+    compute_measurements();
     write_feedback();
-
-    if (visualization_) {
-        visualization_->store_state(d_);
-    }
+    ros_publisher_->store(d_, meas_);
 }
 
 void mujoco_robotsimulator_crospi::step_kinematic()
@@ -238,7 +258,7 @@ void mujoco_robotsimulator_crospi::step_kinematic()
     }
     mj_forward(m_, d_);
 
-    if (config_.feedback.joint_torque) {
+    if (need_tau_) {
         // Joint torques required to execute the commanded motion (inverse dynamics), with the acceleration
         // estimated from the change of the velocity setpoint over one update period.
         for (std::size_t i = 0; i < n; ++i) {
@@ -283,67 +303,44 @@ void mujoco_robotsimulator_crospi::step_dynamic()
         mj_step(m_, d_);
     }
 
-    // After mj_step, the positions are advanced but the derived quantities (body poses, sensors) still correspond
-    // to the previous state. Recompute them if they are reported.
-    const auto& fb = config_.feedback;
-    if (fb.cartesian_pos || fb.cartesian_quat || fb.cartesian_twist || fb.cartesian_wrench ||
-        fb.base_pos || fb.base_quat || fb.base_twist || fb.joint_torque) {
-        mj_forward(m_, d_);
-    }
+    // After mj_step, the positions are advanced but the derived quantities (body poses, sensors, gravity
+    // compensation) still correspond to the previous state: recompute them for the feedback and the sensors.
+    mj_forward(m_, d_);
 }
 
-void mujoco_robotsimulator_crospi::write_feedback()
+void mujoco_robotsimulator_crospi::compute_measurements()
 {
     const std::size_t n = qpos_adr_.size();
+    const bool dynamic = (config_.control_mode != mujoco_sim::ControlMode::KINEMATIC);
     for (std::size_t i = 0; i < n; ++i) {
-        joint_pos_.data[i] = static_cast<float>(d_->qpos[qpos_adr_[i]]);
-    }
-    writeFeedbackJointPosition(joint_pos_);
-
-    const auto& fb = config_.feedback;
-
-    if (fb.joint_vel) {
-        for (std::size_t i = 0; i < n; ++i) {
-            joint_vel_.data[i] = static_cast<float>(d_->qvel[dof_adr_[i]]);
-        }
-        writeFeedbackJointVelocity(joint_vel_);
+        meas_.q[i] = d_->qpos[qpos_adr_[i]];
+        meas_.qd[i] = d_->qvel[dof_adr_[i]];
+        // In the dynamic modes, the motor torque is the controller torque plus the gravity compensation.
+        meas_.tau[i] = tau_[i] + (dynamic ? d_->qfrc_gravcomp[dof_adr_[i]] : 0.0);
     }
 
-    if (fb.joint_torque) {
-        const bool dynamic = (config_.control_mode != mujoco_sim::ControlMode::KINEMATIC);
-        for (std::size_t i = 0; i < n; ++i) {
-            // In the dynamic modes, the motor torque is the controller torque plus the gravity compensation.
-            double tau = tau_[i] + (dynamic ? d_->qfrc_gravcomp[dof_adr_[i]] : 0.0);
-            joint_torque_.data[i] = static_cast<float>(tau);
-        }
-        writeFeedbackJointTorque(joint_torque_);
-    }
-
-    if (fb.cartesian_pos || fb.cartesian_quat || fb.cartesian_twist) {
+    if (need_tcp_pose_ || need_tcp_twist_) {
         const mjtNum* p_b = d_->xpos + 3 * base_body_id_;
         const mjtNum* R_b = d_->xmat + 9 * base_body_id_;
         const mjtNum* p_t = d_->xpos + 3 * tcp_body_id_;
+        mjtNum r[3];
+        mju_sub3(r, p_t, p_b);
 
-        if (fb.cartesian_pos) {
-            mjtNum diff[3], p_rel[3];
-            mju_sub3(diff, p_t, p_b);
-            mju_mulMatTVec3(p_rel, R_b, diff);
-            writeFeedbackCartesianPosition(to_vector3(p_rel));
-        }
-        if (fb.cartesian_quat) {
-            mjtNum q_b_inv[4], q_rel[4];
+        if (need_tcp_pose_) {
+            mjtNum p_rel[3], q_b_inv[4], q_rel[4];
+            mju_mulMatTVec3(p_rel, R_b, r);
+            copy3(meas_.tcp_pos, p_rel);
             mju_negQuat(q_b_inv, d_->xquat + 4 * base_body_id_);
             mju_mulQuat(q_rel, q_b_inv, d_->xquat + 4 * tcp_body_id_);
-            writeFeedbackCartesianQuaternion(to_quaternion(q_rel));
+            std::copy(q_rel, q_rel + 4, meas_.tcp_quat.begin());
         }
-        if (fb.cartesian_twist) {
+        if (need_tcp_twist_) {
             // Velocities [angular; linear] at the body origins, in world orientation
             mjtNum v_t[6], v_b[6];
             mj_objectVelocity(m_, d_, mjOBJ_BODY, tcp_body_id_, v_t, 0);
             mj_objectVelocity(m_, d_, mjOBJ_BODY, base_body_id_, v_b, 0);
             // Twist of the tcp relative to the base, at the tcp origin, expressed in the base frame
-            mjtNum r[3], w_cross_r[3], w_rel[3], v_rel[3];
-            mju_sub3(r, p_t, p_b);
+            mjtNum w_cross_r[3], w_rel[3], v_rel[3];
             mju_cross(w_cross_r, v_b, r);
             mju_sub3(w_rel, v_t, v_b);
             for (int k = 0; k < 3; ++k) {
@@ -352,25 +349,110 @@ void mujoco_robotsimulator_crospi::write_feedback()
             mjtNum w_base[3], v_base[3];
             mju_mulMatTVec3(w_base, R_b, w_rel);
             mju_mulMatTVec3(v_base, R_b, v_rel);
-            writeFeedbackCartesianTwist(to_screw(w_base, v_base));
+            copy3(meas_.tcp_ang_vel, w_base);
+            copy3(meas_.tcp_lin_vel, v_base);
         }
     }
 
-    if (fb.cartesian_wrench) {
-        // MuJoCo force/torque sensors at tcp_link, expressed in the tcp_link frame.
-        writeFeedbackCartesianWrench(to_screw(d_->sensordata + ft_torque_adr_, d_->sensordata + ft_force_adr_));
+    if (need_wrench_) {
+        compute_tcp_wrench();
     }
 
-    if (fb.base_pos) {
-        writeFeedbackBasePosition(to_vector3(d_->xpos + 3 * base_body_id_));
+    if (need_base_pose_) {
+        copy3(meas_.base_pos, d_->xpos + 3 * base_body_id_);
+        std::copy(d_->xquat + 4 * base_body_id_, d_->xquat + 4 * base_body_id_ + 4, meas_.base_quat.begin());
     }
-    if (fb.base_quat) {
-        writeFeedbackBaseQuaternion(to_quaternion(d_->xquat + 4 * base_body_id_));
-    }
-    if (fb.base_twist) {
+    if (need_base_twist_) {
         mjtNum v_b[6];
         mj_objectVelocity(m_, d_, mjOBJ_BODY, base_body_id_, v_b, 0);
-        writeFeedbackBaseTwist(to_screw(v_b, v_b + 3));
+        copy3(meas_.base_ang_vel, v_b);
+        copy3(meas_.base_lin_vel, v_b + 3);
+    }
+}
+
+void mujoco_robotsimulator_crospi::compute_tcp_wrench()
+{
+    // Sum of the contact wrenches exerted by the environment on the end effector, with reference point at the
+    // origin of tcp_link (world orientation).
+    const mjtNum* p_t = d_->xpos + 3 * tcp_body_id_;
+    mjtNum force_env[3] = {0, 0, 0};
+    mjtNum torque_env[3] = {0, 0, 0};
+    for (int i = 0; i < d_->ncon; ++i) {
+        const mjContact& c = d_->contact[i];
+        if (c.exclude != 0 || c.efc_address < 0) {
+            continue;  // inactive contact
+        }
+        const bool on_ee1 = end_effector_body_[m_->geom_bodyid[c.geom[0]]];
+        const bool on_ee2 = end_effector_body_[m_->geom_bodyid[c.geom[1]]];
+        if (on_ee1 == on_ee2) {
+            continue;  // not involving the end effector, or internal to it
+        }
+        // Contact frame -> world: force exerted by geom[0] on geom[1]
+        mjtNum f_contact[6], f_world[3], t_world[3];
+        mj_contactForce(m_, d_, i, f_contact);
+        mju_mulMatTVec3(f_world, c.frame, f_contact);
+        mju_mulMatTVec3(t_world, c.frame, f_contact + 3);
+        const mjtNum sign = on_ee2 ? 1.0 : -1.0;  // force acting on the end effector
+        mjtNum r[3], r_cross_f[3];
+        mju_sub3(r, c.pos, p_t);
+        mju_cross(r_cross_f, r, f_world);
+        for (int k = 0; k < 3; ++k) {
+            force_env[k] += sign * f_world[k];
+            torque_env[k] += sign * (t_world[k] + r_cross_f[k]);
+        }
+    }
+    // Reported: wrench exerted by the end effector on the environment, expressed in tcp_link.
+    const mjtNum* R_t = d_->xmat + 9 * tcp_body_id_;
+    mjtNum f_tcp[3], t_tcp[3];
+    mju_mulMatTVec3(f_tcp, R_t, force_env);
+    mju_mulMatTVec3(t_tcp, R_t, torque_env);
+    for (int k = 0; k < 3; ++k) {
+        meas_.tcp_force[k] = -f_tcp[k];
+        meas_.tcp_torque[k] = -t_tcp[k];
+    }
+}
+
+void mujoco_robotsimulator_crospi::write_feedback()
+{
+    const std::size_t n = qpos_adr_.size();
+    for (std::size_t i = 0; i < n; ++i) {
+        joint_pos_.data[i] = static_cast<float>(meas_.q[i]);
+    }
+    writeFeedbackJointPosition(joint_pos_);
+
+    const auto& fb = config_.feedback;
+    if (fb.joint_vel) {
+        for (std::size_t i = 0; i < n; ++i) {
+            joint_vel_.data[i] = static_cast<float>(meas_.qd[i]);
+        }
+        writeFeedbackJointVelocity(joint_vel_);
+    }
+    if (fb.joint_torque) {
+        for (std::size_t i = 0; i < n; ++i) {
+            joint_torque_.data[i] = static_cast<float>(meas_.tau[i]);
+        }
+        writeFeedbackJointTorque(joint_torque_);
+    }
+    if (fb.cartesian_pos) {
+        writeFeedbackCartesianPosition(to_vector3(meas_.tcp_pos));
+    }
+    if (fb.cartesian_quat) {
+        writeFeedbackCartesianQuaternion(to_quaternion(meas_.tcp_quat));
+    }
+    if (fb.cartesian_twist) {
+        writeFeedbackCartesianTwist(to_screw(meas_.tcp_lin_vel, meas_.tcp_ang_vel));
+    }
+    if (fb.cartesian_wrench) {
+        writeFeedbackCartesianWrench(to_screw(meas_.tcp_force, meas_.tcp_torque));
+    }
+    if (fb.base_pos) {
+        writeFeedbackBasePosition(to_vector3(meas_.base_pos));
+    }
+    if (fb.base_quat) {
+        writeFeedbackBaseQuaternion(to_quaternion(meas_.base_quat));
+    }
+    if (fb.base_twist) {
+        writeFeedbackBaseTwist(to_screw(meas_.base_lin_vel, meas_.base_ang_vel));
     }
 }
 
@@ -392,12 +474,12 @@ void mujoco_robotsimulator_crospi::on_cleanup() {
 
 void mujoco_robotsimulator_crospi::finalize() {
     std::cout << "finalize() called for MuJoCo robot simulator '" << name << "'" << std::endl;
-    visualization_.reset();
+    ros_publisher_.reset();
 }
 
 
 mujoco_robotsimulator_crospi::~mujoco_robotsimulator_crospi() {
-    visualization_.reset();
+    ros_publisher_.reset();
     if (d_) {
         mj_deleteData(d_);
     }

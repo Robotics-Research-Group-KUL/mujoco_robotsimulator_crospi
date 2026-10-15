@@ -28,7 +28,7 @@
 #include "robot_interfacing_utils/robotsimulator.hpp"
 
 #include "mujoco_robotsimulator_crospi/mujoco_simulator_config.hpp"
-#include "mujoco_robotsimulator_crospi/visualization_publisher.hpp"
+#include "mujoco_robotsimulator_crospi/ros_publisher.hpp"
 
 
 namespace etasl {
@@ -54,7 +54,7 @@ class mujoco_robotsimulator_crospi : public RobotSimulator {
 
         mjModel* m_ = nullptr;
         mjData* d_ = nullptr;
-        std::unique_ptr<mujoco_sim::VisualizationPublisher> visualization_;
+        std::unique_ptr<mujoco_sim::RosPublisher> ros_publisher_;
 
         // Indices of the robot_joints in the MuJoCo model
         std::vector<int> jnt_id_;
@@ -64,8 +64,16 @@ class mujoco_robotsimulator_crospi : public RobotSimulator {
         // Ids used for Cartesian/base feedback (-1 if not used)
         int base_body_id_ = -1;
         int tcp_body_id_ = -1;
-        int ft_force_adr_ = -1;
-        int ft_torque_adr_ = -1;
+        std::vector<bool> end_effector_body_;  // bodies whose contacts contribute to the tcp wrench
+
+        // Quantities to compute every update (for the crospi feedback and/or the published sensors)
+        bool need_tau_ = false;
+        bool need_tcp_pose_ = false;
+        bool need_tcp_twist_ = false;
+        bool need_wrench_ = false;
+        bool need_base_pose_ = false;
+        bool need_base_twist_ = false;
+        mujoco_sim::Measurements meas_;
 
         // Controller state
         std::vector<double> q_ref_;            // integrated setpoint (kinematic and position_servo modes)
@@ -83,6 +91,8 @@ class mujoco_robotsimulator_crospi : public RobotSimulator {
         void reset_state();
         void step_kinematic();
         void step_dynamic();
+        void compute_measurements();
+        void compute_tcp_wrench();
         void write_feedback();
 
     public:

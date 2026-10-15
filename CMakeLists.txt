@@ -103,7 +103,7 @@ set(src_mujoco_robotsimulator_crospi
     src/mujoco_robotsimulator_crospi.cpp
     src/mujoco_simulator_config.cpp
     src/mujoco_scene_builder.cpp
-    src/visualization_publisher.cpp
+    src/ros_publisher.cpp
 )
 
 add_library(mujoco_robotsimulator_crospi
@@ -116,6 +116,8 @@ set(rosdependencies
   pluginlib
   rclcpp
   std_msgs
+  sensor_msgs
+  geometry_msgs
   ament_index_cpp
 )
 
@@ -129,6 +131,8 @@ set(ros_targets
     pluginlib::pluginlib
     rclcpp::rclcpp
     ${std_msgs_TARGETS}
+    ${sensor_msgs_TARGETS}
+    ${geometry_msgs_TARGETS}
     ament_index_cpp::ament_index_cpp
   )
 
@@ -198,7 +202,7 @@ install(
 install(DIRECTORY include/
   DESTINATION include)
 
-install(DIRECTORY json_schemas config
+install(DIRECTORY json_schemas config betfsm_tasks_examples
   DESTINATION share/${PROJECT_NAME})
 
 

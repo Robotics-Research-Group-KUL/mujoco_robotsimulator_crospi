@@ -1,0 +1,114 @@
+{
+    "$schema":"tasks-schema.json",
+    "tasks": [
+        {
+            "name": "sine",
+            "description" : "just as a first simple skill to learn to get to work with parameters",
+            "task_specification":{
+                "from-betfsm_demo_lib-version-0.1.0": true,
+                "is-sinewave": true,
+                "file_path": "$[betfsm_demos]/tasks/betfsm_demos_lib/sinewave.etasl.lua",
+                "parameters": {
+                    "amplitude": 0.15,
+                    "frequency": 0.3,
+                    "direction": [0,0,1],
+                    "execution_time": -10,
+                    "task_frame": "tcp_frame"
+                }
+            }
+        },
+        {
+            "name": "MoveHome",
+            "description": "Move home in joint space",
+            "task_specification":{
+                "from-betfsm_demo_lib-version-0.1.0": true,
+                "is-move_joint_space_trap": true,
+                "file_path": "$[betfsm_demos]/tasks/betfsm_demos_lib/move_joint_space_trap.etasl.lua",
+                "parameters": {
+                    "dwell_time": 0.1,
+                    "maxacc": 0.5,
+                    "maxvel": 0.5,
+                    "target_joints": [4.7116, -1.5708, 2.0944, -2.0944, -1.5708, 0],
+                    "units": "radians"                    
+                }
+            }
+        },
+        {
+            "name": "MoveBSpline",
+            "description": "simple sidewards shift while moving in x for 30 cm",
+            "task_specification":{
+                "from-betfsm_demo_lib-version-0.1.0": true,
+                "is-simplebspline": true,
+                "file_path": "$[betfsm_demos]/tasks/betfsm_demos_lib/simplebspline.etasl.lua",
+                "parameters": {
+                    "cp_x": [0, 0.1,    0.2,  0.3],
+                    "cp_y": [0, 0,       0.15,  0.15],
+                    "cp_z": [0, 0,      0,      0],
+                    "degree": 3,
+                    "knots": [0,0,0,1,1,1],
+                    "task_frame": "tcp_frame"
+                }
+            }
+        },
+        {
+            "name": "MoveBSplineCVel",
+            "description": "simple sidewards shift while moving in x for 60 cm",
+            "task_specification":{
+                "from-betfsm_demo_lib-version-0.1.0": true,
+                "is-bspline_constant_vel": true,
+                "file_path": "$[betfsm_demos]/tasks/betfsm_demos_lib/bspline_constant_vel.etasl.lua",
+                "parameters": {
+                    "cp_x": [0, 0.2,    0.4,  0.6],
+                    "cp_y": [0, 0,       0.2,  0.2],
+                    "cp_z": [0, 0,      0,      0],
+                    "velocity": 0.2,
+                    "degree": 3,
+                    "knots": [0,0,0,1,1,1],
+                    "task_frame": "tcp_frame"
+                }
+            }
+        },
+        {
+            "name": "MovingDown",
+            "task_specification": {
+                "from-core_task_lib-version-0.1.0": true,
+                "is-move_cartesianspace_relative": true,
+                "file_path": "$[crospi_application_template]/task_specifications/libraries/core_task_lib/task_specifications/move_cartesianspace_relative.etasl.lua",
+                "parameters": {
+                    "delta_pos": [0, 0, -0.2],
+                    "eq_r": 0.08,
+                    "maxacc": 0.1,
+                    "maxvel": 0.1,
+                    "delta_euler": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "task_frame": "tcp_frame",
+                    "wrt_frame": "world_frame"
+                }
+            }
+        },
+        {
+            "name": "MovingUp",
+            "task_specification": {
+                "from-core_task_lib-version-0.1.0": true,
+                "is-move_cartesianspace_relative": true,
+                "file_path": "$[crospi_application_template]/task_specifications/libraries/core_task_lib/task_specifications/move_cartesianspace_relative.etasl.lua",
+                "parameters": {
+                    "delta_pos": [0, 0.1, 0.3],
+                    "eq_r": 0.08,
+                    "maxacc": 0.1,
+                    "maxvel": 0.1,
+                    "delta_euler": [
+                        0,
+                        0,
+                        0
+                    ],
+                    "task_frame": "tcp_frame",
+                    "wrt_frame": "world_frame"
+                }
+            }
+        }
+    ]
+}

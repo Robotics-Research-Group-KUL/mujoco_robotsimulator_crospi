@@ -1,274 +1,563 @@
 {
     "$schema": "http://json-schema.org/draft-06/schema",
-    "$id":"mujoco_robotsimulator_crospi.json",
-    "type":"object",
-    "properties":{
-        "is-mujoco_robotsimulator_crospi" : {
-            "description":"To indicate that the task will be executed in simulation with the MuJoCo physics engine. The robot is loaded from a URDF file and placed (optionally) in an MJCF environment.",
-            "type":"boolean",
+    "$id": "mujoco_robotsimulator_crospi.json",
+    "type": "object",
+    "properties": {
+        "is-mujoco_robotsimulator_crospi": {
+            "description": "To indicate that the task will be executed in simulation with the MuJoCo physics engine. The robot is loaded from a URDF file and placed (optionally) in an MJCF environment.",
+            "type": "boolean",
             "const": true
-          }
-    },
-    "required":["is-mujoco_robotsimulator_crospi"],
-    "additionalProperties": true,
-    "dependencies":{
-        "is-mujoco_robotsimulator_crospi":{
-          "required":[
-              "robot_joints",
-              "initial_joints",
-              "periodicity",
-              "urdf_path",
-              "base_position",
-              "base_quaternion_xyzw",
-              "add_ground_plane",
-              "simulation_timestep",
-              "integrator",
-              "gravity",
-              "contacts_enabled",
-              "control_mode"
-          ],
-          "properties":{
-            "robot_joints": {
-                "description":"Names of the joints that will be simulated and controlled through this robotsimulator. These names need to be consistent with the ones declared in the URDF file (urdf_path) and must exist also in the robot_joints declared in the default_robot_specification. Joints of the URDF that are not listed here are simulated as passive joints.",
-                "type":"array",
-                "items": {"type": "string"},
-                "minItems": 1,
-                "examples": [
-                    ["shoulder_pan_joint","shoulder_lift_joint","elbow_joint","wrist_1_joint","wrist_2_joint","wrist_3_joint"],
-                    ["joint1","joint2","joint3","joint4","joint5","joint6","joint7"]
-                ]
-            },
-            "initial_joints" : {
-                "description":"Initial joint values in [rad] for revolute joints or [m] for prismatic joints. The size must coincide with the length of robot_joints.",
-                "type":"array",
-                "items": {"type": "number"},
-                "examples": [[0.0, -1.5708, 1.5708, -1.5708, -1.5708, 0.0]]
-            },
-            "periodicity" : {
-                "description":"Period in seconds at which the simulator is updated by crospi (1/periodicity is the update frequency in Hz). Every update reads the joint velocity setpoints, advances the simulation by periodicity seconds and writes the feedback. Must be an integer multiple of simulation_timestep.",
-                "type":"number",
-                "exclusiveMinimum": 0,
-                "examples": [0.01]
-            },
-            "urdf_path" : {
-                "description":"Path of the URDF file of the robot. Supports $[package_name]/relative/path (crospi interpolation), package://package_name/relative/path, file:// and absolute paths. Mesh paths inside the URDF may use package://, file://, absolute paths or paths relative to the URDF file. Xacro files are not supported (generate the URDF first). The collision geometry of the URDF is used for both simulation and visualization; MuJoCo supports STL, OBJ and MSH meshes.",
-                "type":"string",
-                "examples": ["$[mujoco_robotsimulator_crospi]/config/urdf/ur10e.urdf"]
-            },
-            "environment_mjcf_path" : {
-                "description":"Optional. Path of a MuJoCo MJCF (.xml) file describing the environment (tables, objects, lights, etc.). The robot is attached to the world body of this scene. Same path conventions as urdf_path. The physics options of this file (timestep, gravity, integrator and contact flag) are overwritten by this configuration. If omitted, the robot is placed in an empty world.",
-                "type":"string",
-                "examples": ["$[mujoco_robotsimulator_crospi]/config/environments/table_with_box.xml"]
-            },
-            "base_position" : {
-                "description":"Position [x, y, z] in [m] of the root link of the URDF with respect to the world of the simulation.",
-                "type":"array",
-                "items": {"type": "number"},
-                "minItems": 3,
-                "maxItems": 3,
-                "examples": [[0.0, 0.0, 0.0]]
-            },
-            "base_quaternion_xyzw" : {
-                "description":"Orientation [qx, qy, qz, qw] (unit quaternion) of the root link of the URDF with respect to the world of the simulation.",
-                "type":"array",
-                "items": {"type": "number"},
-                "minItems": 4,
-                "maxItems": 4,
-                "examples": [[0.0, 0.0, 0.0, 1.0]]
-            },
-            "add_ground_plane" : {
-                "description":"If true, an infinite ground plane (collision enabled) is added at z = 0 of the world.",
-                "type":"boolean",
-                "examples": [true]
-            },
-            "simulation_timestep" : {
-                "description":"Timestep in seconds of the MuJoCo physics integration. Each update executes periodicity/simulation_timestep physics steps. Smaller timesteps are needed for stiff joint controllers and contacts.",
-                "type":"number",
-                "exclusiveMinimum": 0,
-                "examples": [0.001, 0.002]
-            },
-            "integrator" : {
-                "description":"Numerical integrator of MuJoCo. implicitfast is recommended (stable with joint damping).",
-                "type":"string",
-                "enum": ["Euler", "RK4", "implicit", "implicitfast"],
-                "examples": ["implicitfast"]
-            },
-            "gravity" : {
-                "description":"Gravity vector [gx, gy, gz] in [m/s^2] expressed in the world frame.",
-                "type":"array",
-                "items": {"type": "number"},
-                "minItems": 3,
-                "maxItems": 3,
-                "examples": [[0.0, 0.0, -9.81]]
-            },
-            "contacts_enabled" : {
-                "description":"If false, all contacts (between the robot, the environment and itself) are disabled. Contacts between adjacent links of the robot (consecutive links in the URDF tree) are always excluded.",
-                "type":"boolean",
-                "examples": [true]
-            },
-            "joint_armature" : {
-                "description":"Optional. Armature (reflected rotor inertia) of each joint in robot_joints, in [kg m^2] for revolute or [kg] for prismatic joints. Increases the numerical stability of the dynamic control modes. If omitted, the value of the URDF (zero) is used.",
-                "type":"array",
-                "items": {"type": "number", "minimum": 0},
-                "examples": [[0.5, 0.5, 0.3, 0.1, 0.1, 0.1]]
-            },
-            "joint_damping" : {
-                "description":"Optional. Viscous damping of each joint in robot_joints, in [Nms/rad] or [Ns/m]. If omitted, the <dynamics damping> of the URDF is used.",
-                "type":"array",
-                "items": {"type": "number", "minimum": 0},
-                "examples": [[1.0, 1.0, 1.0, 0.5, 0.5, 0.5]]
-            },
-            "joint_frictionloss" : {
-                "description":"Optional. Dry (Coulomb) friction of each joint in robot_joints, in [Nm] or [N]. If omitted, the <dynamics friction> of the URDF is used.",
-                "type":"array",
-                "items": {"type": "number", "minimum": 0},
-                "examples": [[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]]
-            },
-            "control_mode" : {
-                "description":"How the joint velocity setpoints of crospi are applied. kinematic: the joint positions are the integral of the setpoints (perfect tracking, the robot cannot be stopped by contacts; the rest of the scene is simulated dynamically). position_servo: dynamic simulation where a joint PD controller tracks the integrated setpoint, tau = joint_stiffness (q_ref - q) + joint_damping_gains (qd_sp - qd). velocity_servo: dynamic simulation where a joint velocity controller tracks the setpoint, tau = joint_damping_gains (qd_sp - qd).",
-                "type":"string",
-                "enum": ["kinematic", "position_servo", "velocity_servo"],
-                "examples": ["position_servo"]
-            },
-            "joint_stiffness" : {
-                "description":"Only for control_mode position_servo (required). Proportional gain of the joint controller for each joint in robot_joints, in [Nm/rad] or [N/m].",
-                "type":"array",
-                "items": {"type": "number", "minimum": 0},
-                "examples": [[8000.0, 8000.0, 5000.0, 1000.0, 1000.0, 1000.0]]
-            },
-            "joint_damping_gains" : {
-                "description":"Only for control_modes position_servo and velocity_servo (required). Derivative (velocity) gain of the joint controller for each joint in robot_joints, in [Nms/rad] or [Ns/m].",
-                "type":"array",
-                "items": {"type": "number", "minimum": 0},
-                "examples": [[300.0, 300.0, 150.0, 30.0, 30.0, 30.0]]
-            },
-            "gravity_compensation" : {
-                "description":"Only for control_modes position_servo and velocity_servo (required). If true, the weight of all the links of the robot is compensated (as done by the internal controller of most industrial robots).",
-                "type":"boolean",
-                "examples": [true]
-            },
-            "clamp_torques_to_effort_limits" : {
-                "description":"Only for control_modes position_servo and velocity_servo (required). If true, the total motor torque (controller and gravity compensation) of each joint is limited to the effort limit of the URDF (<limit effort>).",
-                "type":"boolean",
-                "examples": [true]
-            },
-            "base_link" : {
-                "description":"Link of the URDF used as reference frame for the Cartesian feedback (cartesian_pos, cartesian_quat, cartesian_twist), and whose pose/twist in the world is reported as base feedback (base_pos, base_quat, base_twist). Required if any of these feedback channels is requested.",
-                "type":"string",
-                "examples": ["base_link"]
-            },
-            "tcp_link" : {
-                "description":"Link of the URDF whose pose/twist with respect to base_link is reported as Cartesian feedback, and at which the wrench is measured (cartesian_wrench). Required if any Cartesian feedback channel is requested.",
-                "type":"string",
-                "examples": ["tool0"]
-            },
-            "name_expr_joint_vel" : {
-              "description":"If defined, the simulated joint velocities are reported. Defines the name of the expression that will be used to put the joint velocities coming from this simulator. This name can be then used in etasl with selected_name_0 = ctx:createInputChannelScalar('selected_name_0') for each joint",
-              "type":"string",
-              "examples": ["joint_vel"]
-            },
-            "name_expr_joint_torque" : {
-              "description":"If defined, the joint torques are reported: the motor torques (controller and gravity compensation) in the dynamic control modes, or the inverse-dynamics torques of the commanded motion in the kinematic mode. Defines the name of the expression that will be used to put the joint torques coming from this simulator. This name can be then used in etasl with selected_name_0 = ctx:createInputChannelScalar('selected_name_0') for each joint",
-              "type":"string",
-              "examples": ["joint_torque"]
-            },
-            "name_expr_cartesian_pos" : {
-              "description":"If defined, the position of the origin of tcp_link expressed in base_link is reported. Name of the expression that will be used to put the cartesian positions coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelVector('selected_name')",
-                "type":"string",
-                "examples": ["tcp_pos"]
-            },
-            "name_expr_cartesian_quat" : {
-              "description":"If defined, the orientation of tcp_link with respect to base_link is reported. Name of the expression that will be used to put the cartesian orientation coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelRotation('selected_name')",
-                "type":"string",
-                "examples": ["tcp_quat"]
-            },
-            "name_expr_cartesian_twist" : {
-              "description":"If defined, the twist of tcp_link relative to base_link (reference point: origin of tcp_link, expressed in base_link) is reported. Name of the expression that will be used to put the cartesian twist coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelTwist('selected_name')",
-                "type":"string",
-                "examples": ["tcp_twist"]
-            },
-            "name_expr_cartesian_wrench" : {
-              "description":"If defined, a force/torque sensor is simulated at the origin of tcp_link. It reports the wrench exerted by the parent link on tcp_link and its child links, expressed in tcp_link (for a quasi-static tool of negligible mass, this equals the wrench that the tool exerts on the environment). Only contacts on tcp_link and its child links are measured. Name of the expression that will be used to put the cartesian wrench coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelWrench('selected_name')",
-              "type":"string",
-              "examples": ["tcp_wrench"]
-            },
-            "name_expr_base_pos" : {
-              "description":"If defined, the position of base_link in the world of the simulation is reported. Name of the expression that will be used to put the position of the base of the robot coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelVector('selected_name')",
-                "type":"string",
-                "examples": ["base_pos"]
-            },
-            "name_expr_base_quat" : {
-              "description":"If defined, the orientation of base_link in the world of the simulation is reported. Name of the expression that will be used to put the orientation of the base of the robot coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelRotation('selected_name')",
-              "type":"string",
-              "examples": ["base_quat"]
-            },
-            "name_expr_base_twist" : {
-              "description":"If defined, the twist of base_link (reference point: origin of base_link, expressed in the world) is reported. Name of the expression that will be used to put the twist of the base of the robot coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelTwist('selected_name')",
-                "type":"string",
-                "examples": ["base_twist"]
-            },
-            "visualization" : {
-              "description":"Optional. If defined, the simulator creates a ROS 2 node that publishes the compiled MuJoCo model and the simulation state, so that it can be visualized with: ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py --model-topic <model_topic> --state-topic <state_topic> --render-rate <Hz>",
-              "type":"object",
-              "required": ["node_name", "model_topic", "state_topic", "publish_period"],
-              "additionalProperties": false,
-              "properties": {
-                  "node_name": {
-                      "description":"Name of the ROS 2 node created by the simulator. Must be unique if several simulators publish their visualization.",
-                      "type":"string",
-                      "examples": ["mujoco_robotsimulator"]
-                  },
-                  "model_topic": {
-                      "description":"Topic (std_msgs/UInt8MultiArray, reliable and transient local) on which the compiled MuJoCo model is published once in MJB binary format.",
-                      "type":"string",
-                      "examples": ["/mujoco_sim/model"]
-                  },
-                  "state_topic": {
-                      "description":"Topic (std_msgs/Float64MultiArray) on which [simulation time, qpos...] is published.",
-                      "type":"string",
-                      "examples": ["/mujoco_sim/state"]
-                  },
-                  "publish_period": {
-                      "description":"Period in seconds at which the state is published.",
-                      "type":"number",
-                      "exclusiveMinimum": 0,
-                      "examples": [0.033]
-                  }
-              }
-            }
-          },
-          "oneOf": [
-            {
-              "properties": {"control_mode": {"const": "kinematic"}},
-              "not": {
-                "anyOf": [
-                  {"required": ["joint_stiffness"]},
-                  {"required": ["joint_damping_gains"]},
-                  {"required": ["gravity_compensation"]},
-                  {"required": ["clamp_torques_to_effort_limits"]}
-                ]
-              }
-            },
-            {
-              "properties": {"control_mode": {"const": "position_servo"}},
-              "required": ["joint_stiffness", "joint_damping_gains", "gravity_compensation", "clamp_torques_to_effort_limits"]
-            },
-            {
-              "properties": {"control_mode": {"const": "velocity_servo"}},
-              "required": ["joint_damping_gains", "gravity_compensation", "clamp_torques_to_effort_limits"],
-              "not": {"required": ["joint_stiffness"]}
-            }
-          ],
-          "not": {"required": ["name_expr_joint_current"]},
-          "dependencies": {
-            "name_expr_cartesian_pos": ["base_link", "tcp_link"],
-            "name_expr_cartesian_quat": ["base_link", "tcp_link"],
-            "name_expr_cartesian_twist": ["base_link", "tcp_link"],
-            "name_expr_cartesian_wrench": ["tcp_link"],
-            "name_expr_base_pos": ["base_link"],
-            "name_expr_base_quat": ["base_link"],
-            "name_expr_base_twist": ["base_link"]
-          }
         }
-      }
+    },
+    "required": [
+        "is-mujoco_robotsimulator_crospi"
+    ],
+    "additionalProperties": true,
+    "dependencies": {
+        "is-mujoco_robotsimulator_crospi": {
+            "required": [
+                "robot_joints",
+                "initial_joints",
+                "periodicity",
+                "urdf_path",
+                "base_position",
+                "base_quaternion_xyzw",
+                "add_ground_plane",
+                "simulation_timestep",
+                "integrator",
+                "gravity",
+                "contacts_enabled",
+                "control_mode",
+                "ros_node_name",
+                "sensor_publishing"
+            ],
+            "properties": {
+                "robot_joints": {
+                    "description": "Names of the joints that will be simulated and controlled through this robotsimulator. These names need to be consistent with the ones declared in the URDF file (urdf_path) and must exist also in the robot_joints declared in the default_robot_specification. Joints of the URDF that are not listed here are simulated as passive joints.",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "minItems": 1,
+                    "examples": [
+                        [
+                            "shoulder_pan_joint",
+                            "shoulder_lift_joint",
+                            "elbow_joint",
+                            "wrist_1_joint",
+                            "wrist_2_joint",
+                            "wrist_3_joint"
+                        ],
+                        [
+                            "joint1",
+                            "joint2",
+                            "joint3",
+                            "joint4",
+                            "joint5",
+                            "joint6",
+                            "joint7"
+                        ]
+                    ]
+                },
+                "initial_joints": {
+                    "description": "Initial joint values in [rad] for revolute joints or [m] for prismatic joints. The size must coincide with the length of robot_joints.",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    },
+                    "examples": [
+                        [
+                            0.0,
+                            -1.5708,
+                            1.5708,
+                            -1.5708,
+                            -1.5708,
+                            0.0
+                        ]
+                    ]
+                },
+                "periodicity": {
+                    "description": "Period in seconds at which the simulator is updated by crospi (1/periodicity is the update frequency in Hz). Every update reads the joint velocity setpoints, advances the simulation by periodicity seconds and writes the feedback. Must be an integer multiple of simulation_timestep.",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "examples": [
+                        0.01
+                    ]
+                },
+                "urdf_path": {
+                    "description": "Path of the URDF file of the robot. Supports $[package_name]/relative/path (crospi interpolation), package://package_name/relative/path, file:// and absolute paths. Mesh paths inside the URDF may use package://, file://, absolute paths or paths relative to the URDF file. Xacro files are not supported (generate the URDF first). The collision geometry of the URDF is used for both simulation and visualization; MuJoCo supports STL, OBJ and MSH meshes.",
+                    "type": "string",
+                    "examples": [
+                        "$[mujoco_robotsimulator_crospi]/config/urdf/ur10e.urdf"
+                    ]
+                },
+                "environment_mjcf_path": {
+                    "description": "Optional. Path of a MuJoCo MJCF (.xml) file describing the environment (tables, objects, lights, etc.). The robot is attached to the world body of this scene. Same path conventions as urdf_path. The physics options of this file (timestep, gravity, integrator and contact flag) are overwritten by this configuration. If omitted, the robot is placed in an empty world.",
+                    "type": "string",
+                    "examples": [
+                        "$[mujoco_robotsimulator_crospi]/config/environments/table_with_box.xml"
+                    ]
+                },
+                "base_position": {
+                    "description": "Position [x, y, z] in [m] of the root link of the URDF with respect to the world of the simulation.",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "examples": [
+                        [
+                            0.0,
+                            0.0,
+                            0.0
+                        ]
+                    ]
+                },
+                "base_quaternion_xyzw": {
+                    "description": "Orientation [qx, qy, qz, qw] (unit quaternion) of the root link of the URDF with respect to the world of the simulation.",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    },
+                    "minItems": 4,
+                    "maxItems": 4,
+                    "examples": [
+                        [
+                            0.0,
+                            0.0,
+                            0.0,
+                            1.0
+                        ]
+                    ]
+                },
+                "add_ground_plane": {
+                    "description": "If true, an infinite ground plane (collision enabled) is added at z = 0 of the world.",
+                    "type": "boolean",
+                    "examples": [
+                        true
+                    ]
+                },
+                "simulation_timestep": {
+                    "description": "Timestep in seconds of the MuJoCo physics integration. Each update executes periodicity/simulation_timestep physics steps. Smaller timesteps are needed for stiff joint controllers and contacts.",
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "examples": [
+                        0.001,
+                        0.002
+                    ]
+                },
+                "integrator": {
+                    "description": "Numerical integrator of MuJoCo. implicitfast is recommended (stable with joint damping).",
+                    "type": "string",
+                    "enum": [
+                        "Euler",
+                        "RK4",
+                        "implicit",
+                        "implicitfast"
+                    ],
+                    "examples": [
+                        "implicitfast"
+                    ]
+                },
+                "gravity": {
+                    "description": "Gravity vector [gx, gy, gz] in [m/s^2] expressed in the world frame.",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3,
+                    "examples": [
+                        [
+                            0.0,
+                            0.0,
+                            -9.81
+                        ]
+                    ]
+                },
+                "contacts_enabled": {
+                    "description": "If false, all contacts (between the robot, the environment and itself) are disabled. Contacts between adjacent links of the robot (consecutive links in the URDF tree) are always excluded.",
+                    "type": "boolean",
+                    "examples": [
+                        true
+                    ]
+                },
+                "joint_armature": {
+                    "description": "Optional. Armature (reflected rotor inertia) of each joint in robot_joints, in [kg m^2] for revolute or [kg] for prismatic joints. Increases the numerical stability of the dynamic control modes. If omitted, the value of the URDF (zero) is used.",
+                    "type": "array",
+                    "items": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "examples": [
+                        [
+                            0.5,
+                            0.5,
+                            0.3,
+                            0.1,
+                            0.1,
+                            0.1
+                        ]
+                    ]
+                },
+                "joint_damping": {
+                    "description": "Optional. Viscous damping of each joint in robot_joints, in [Nms/rad] or [Ns/m]. If omitted, the <dynamics damping> of the URDF is used.",
+                    "type": "array",
+                    "items": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "examples": [
+                        [
+                            1.0,
+                            1.0,
+                            1.0,
+                            0.5,
+                            0.5,
+                            0.5
+                        ]
+                    ]
+                },
+                "joint_frictionloss": {
+                    "description": "Optional. Dry (Coulomb) friction of each joint in robot_joints, in [Nm] or [N]. If omitted, the <dynamics friction> of the URDF is used.",
+                    "type": "array",
+                    "items": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "examples": [
+                        [
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0
+                        ]
+                    ]
+                },
+                "control_mode": {
+                    "description": "How the joint velocity setpoints of crospi are applied. kinematic: the joint positions are the integral of the setpoints (perfect tracking, the robot cannot be stopped by contacts; the rest of the scene is simulated dynamically). position_servo: dynamic simulation where a joint PD controller tracks the integrated setpoint, tau = joint_stiffness (q_ref - q) + joint_damping_gains (qd_sp - qd). velocity_servo: dynamic simulation where a joint velocity controller tracks the setpoint, tau = joint_damping_gains (qd_sp - qd).",
+                    "type": "string",
+                    "enum": [
+                        "kinematic",
+                        "position_servo",
+                        "velocity_servo"
+                    ],
+                    "examples": [
+                        "position_servo"
+                    ]
+                },
+                "joint_stiffness": {
+                    "description": "Only for control_mode position_servo (required). Proportional gain of the joint controller for each joint in robot_joints, in [Nm/rad] or [N/m].",
+                    "type": "array",
+                    "items": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "examples": [
+                        [
+                            8000.0,
+                            8000.0,
+                            5000.0,
+                            1000.0,
+                            1000.0,
+                            1000.0
+                        ]
+                    ]
+                },
+                "joint_damping_gains": {
+                    "description": "Only for control_modes position_servo and velocity_servo (required). Derivative (velocity) gain of the joint controller for each joint in robot_joints, in [Nms/rad] or [Ns/m].",
+                    "type": "array",
+                    "items": {
+                        "type": "number",
+                        "minimum": 0
+                    },
+                    "examples": [
+                        [
+                            300.0,
+                            300.0,
+                            150.0,
+                            30.0,
+                            30.0,
+                            30.0
+                        ]
+                    ]
+                },
+                "gravity_compensation": {
+                    "description": "Only for control_modes position_servo and velocity_servo (required). If true, the weight of all the links of the robot is compensated (as done by the internal controller of most industrial robots).",
+                    "type": "boolean",
+                    "examples": [
+                        true
+                    ]
+                },
+                "clamp_torques_to_effort_limits": {
+                    "description": "Only for control_modes position_servo and velocity_servo (required). If true, the total motor torque (controller and gravity compensation) of each joint is limited to the effort limit of the URDF (<limit effort>).",
+                    "type": "boolean",
+                    "examples": [
+                        true
+                    ]
+                },
+                "base_link": {
+                    "description": "Link of the URDF used as reference frame for the Cartesian feedback (cartesian_pos, cartesian_quat, cartesian_twist), and whose pose/twist in the world is reported as base feedback (base_pos, base_quat, base_twist). Required if any of these feedback channels is requested.",
+                    "type": "string",
+                    "examples": [
+                        "base_link"
+                    ]
+                },
+                "tcp_link": {
+                    "description": "Link of the URDF whose pose/twist with respect to base_link is reported as Cartesian feedback, and at whose origin the contact wrench of the end effector is reported (cartesian_wrench / tcp_wrench). Required if any Cartesian feedback channel is requested.",
+                    "type": "string",
+                    "examples": [
+                        "tool0"
+                    ]
+                },
+                "name_expr_joint_vel": {
+                    "description": "If defined, the simulated joint velocities are reported. Defines the name of the expression that will be used to put the joint velocities coming from this simulator. This name can be then used in etasl with selected_name_0 = ctx:createInputChannelScalar('selected_name_0') for each joint",
+                    "type": "string",
+                    "examples": [
+                        "joint_vel"
+                    ]
+                },
+                "name_expr_joint_torque": {
+                    "description": "If defined, the joint torques are reported: the motor torques (controller and gravity compensation) in the dynamic control modes, or the inverse-dynamics torques of the commanded motion in the kinematic mode. Defines the name of the expression that will be used to put the joint torques coming from this simulator. This name can be then used in etasl with selected_name_0 = ctx:createInputChannelScalar('selected_name_0') for each joint",
+                    "type": "string",
+                    "examples": [
+                        "joint_torque"
+                    ]
+                },
+                "name_expr_cartesian_pos": {
+                    "description": "If defined, the position of the origin of tcp_link expressed in base_link is reported. Name of the expression that will be used to put the cartesian positions coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelVector('selected_name')",
+                    "type": "string",
+                    "examples": [
+                        "tcp_pos"
+                    ]
+                },
+                "name_expr_cartesian_quat": {
+                    "description": "If defined, the orientation of tcp_link with respect to base_link is reported. Name of the expression that will be used to put the cartesian orientation coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelRotation('selected_name')",
+                    "type": "string",
+                    "examples": [
+                        "tcp_quat"
+                    ]
+                },
+                "name_expr_cartesian_twist": {
+                    "description": "If defined, the twist of tcp_link relative to base_link (reference point: origin of tcp_link, expressed in base_link) is reported. Name of the expression that will be used to put the cartesian twist coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelTwist('selected_name')",
+                    "type": "string",
+                    "examples": [
+                        "tcp_twist"
+                    ]
+                },
+                "name_expr_cartesian_wrench": {
+                    "description": "If defined, the contact wrench of the end effector is reported: the sum of the contact forces/torques that the end effector, i.e. the rigid body group of tcp_link (the links welded to it with fixed joints, e.g. wrist_3_link, flange and tool0 of a UR robot) and all the links mounted after it (e.g. a gripper) exerts on the environment, with reference point at the origin of tcp_link and expressed in tcp_link. It is zero without contact and contains no gravity or inertia of the links. Name of the expression that will be used to put the cartesian wrench coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelWrench('selected_name')",
+                    "type": "string",
+                    "examples": [
+                        "tcp_wrench"
+                    ]
+                },
+                "name_expr_base_pos": {
+                    "description": "If defined, the position of base_link in the world of the simulation is reported. Name of the expression that will be used to put the position of the base of the robot coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelVector('selected_name')",
+                    "type": "string",
+                    "examples": [
+                        "base_pos"
+                    ]
+                },
+                "name_expr_base_quat": {
+                    "description": "If defined, the orientation of base_link in the world of the simulation is reported. Name of the expression that will be used to put the orientation of the base of the robot coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelRotation('selected_name')",
+                    "type": "string",
+                    "examples": [
+                        "base_quat"
+                    ]
+                },
+                "name_expr_base_twist": {
+                    "description": "If defined, the twist of base_link (reference point: origin of base_link, expressed in the world) is reported. Name of the expression that will be used to put the twist of the base of the robot coming from this simulator. This name can be then used in etasl with selected_name = ctx:createInputChannelTwist('selected_name')",
+                    "type": "string",
+                    "examples": [
+                        "base_twist"
+                    ]
+                },
+                "ros_node_name": {
+                    "description": "Name of the ROS 2 node created by the simulator to publish the sensor values (and the visualization data). Must be unique if several simulators run at the same time.",
+                    "type": "string",
+                    "examples": [
+                        "mujoco_robotsimulator"
+                    ]
+                },
+                "sensor_publishing": {
+                    "description": "Publication of the sensor values on ROS 2 topics with standard messages (e.g. for PlotJuggler or other nodes). Topics, relative to topic_namespace: joint_state -> <ns>/joint_states (sensor_msgs/JointState: position, velocity, effort = joint torque as in name_expr_joint_torque); tcp_pose -> <ns>/tcp_pose (geometry_msgs/PoseStamped, tcp_link w.r.t. base_link); tcp_twist -> <ns>/tcp_twist (geometry_msgs/TwistStamped, as name_expr_cartesian_twist); tcp_wrench -> <ns>/tcp_wrench (geometry_msgs/WrenchStamped, as name_expr_cartesian_wrench, frame tcp_link); base_pose -> <ns>/base_pose (geometry_msgs/PoseStamped, frame world); base_twist -> <ns>/base_twist (geometry_msgs/TwistStamped, frame world); any named MuJoCo sensor <name> of the environment MJCF -> <ns>/mujoco_sensors/<name> (std_msgs/Float64MultiArray with the sensor data).",
+                    "type": "object",
+                    "required": [
+                        "topic_namespace",
+                        "publish_period"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                        "topic_namespace": {
+                            "description": "Prefix of all the sensor topics.",
+                            "type": "string",
+                            "examples": [
+                                "/mujoco_sim/sensors"
+                            ]
+                        },
+                        "publish_period": {
+                            "description": "Period in seconds at which the sensor values are published (the latest simulated values are published).",
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "examples": [
+                                0.01
+                            ]
+                        },
+                        "sensors": {
+                            "description": "Optional. Sensors to publish. If omitted, ALL the available sensors are published: joint_state, tcp_pose and tcp_twist (if base_link and tcp_link are defined), tcp_wrench (if tcp_link is defined), base_pose and base_twist (if base_link is defined), and all the named MuJoCo sensors of the environment MJCF. If specified, only the listed sensors are published. Built-in names: joint_state, tcp_pose, tcp_twist, tcp_wrench, base_pose, base_twist; any other name refers to a MuJoCo sensor of the environment MJCF.",
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "uniqueItems": true,
+                            "examples": [
+                                [
+                                    "joint_state",
+                                    "tcp_pose",
+                                    "tcp_wrench"
+                                ],
+                                [
+                                    "joint_state",
+                                    "box_position",
+                                    "table_top_touch"
+                                ]
+                            ]
+                        }
+                    }
+                },
+                "visualization": {
+                    "description": "Optional. If defined, the simulator publishes (with the node ros_node_name) the compiled MuJoCo model and the simulation state, so that it can be visualized with: ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py --model-topic <model_topic> --state-topic <state_topic> --render-rate <Hz>",
+                    "type": "object",
+                    "required": [
+                        "model_topic",
+                        "state_topic",
+                        "publish_period"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                        "model_topic": {
+                            "description": "Topic (std_msgs/UInt8MultiArray, reliable and transient local) on which the compiled MuJoCo model is published once in MJB binary format.",
+                            "type": "string",
+                            "examples": [
+                                "/mujoco_sim/model"
+                            ]
+                        },
+                        "state_topic": {
+                            "description": "Topic (std_msgs/Float64MultiArray) on which [simulation time, qpos...] is published.",
+                            "type": "string",
+                            "examples": [
+                                "/mujoco_sim/state"
+                            ]
+                        },
+                        "publish_period": {
+                            "description": "Period in seconds at which the state is published.",
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "examples": [
+                                0.033
+                            ]
+                        }
+                    }
+                }
+            },
+            "oneOf": [
+                {
+                    "properties": {
+                        "control_mode": {
+                            "const": "kinematic"
+                        }
+                    },
+                    "not": {
+                        "anyOf": [
+                            {
+                                "required": [
+                                    "joint_stiffness"
+                                ]
+                            },
+                            {
+                                "required": [
+                                    "joint_damping_gains"
+                                ]
+                            },
+                            {
+                                "required": [
+                                    "gravity_compensation"
+                                ]
+                            },
+                            {
+                                "required": [
+                                    "clamp_torques_to_effort_limits"
+                                ]
+                            }
+                        ]
+                    }
+                },
+                {
+                    "properties": {
+                        "control_mode": {
+                            "const": "position_servo"
+                        }
+                    },
+                    "required": [
+                        "joint_stiffness",
+                        "joint_damping_gains",
+                        "gravity_compensation",
+                        "clamp_torques_to_effort_limits"
+                    ]
+                },
+                {
+                    "properties": {
+                        "control_mode": {
+                            "const": "velocity_servo"
+                        }
+                    },
+                    "required": [
+                        "joint_damping_gains",
+                        "gravity_compensation",
+                        "clamp_torques_to_effort_limits"
+                    ],
+                    "not": {
+                        "required": [
+                            "joint_stiffness"
+                        ]
+                    }
+                }
+            ],
+            "not": {
+                "required": [
+                    "name_expr_joint_current"
+                ]
+            },
+            "dependencies": {
+                "name_expr_cartesian_pos": [
+                    "base_link",
+                    "tcp_link"
+                ],
+                "name_expr_cartesian_quat": [
+                    "base_link",
+                    "tcp_link"
+                ],
+                "name_expr_cartesian_twist": [
+                    "base_link",
+                    "tcp_link"
+                ],
+                "name_expr_cartesian_wrench": [
+                    "tcp_link"
+                ],
+                "name_expr_base_pos": [
+                    "base_link"
+                ],
+                "name_expr_base_quat": [
+                    "base_link"
+                ],
+                "name_expr_base_twist": [
+                    "base_link"
+                ]
+            }
+        }
+    }
 }
