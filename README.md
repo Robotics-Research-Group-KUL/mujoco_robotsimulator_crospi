@@ -1,5 +1,7 @@
 # mujoco_robotsimulator_crospi Package
 
+**[under development!! Feel free to test under your own risk of loosing time]**
+
 A [crospi](https://rob.pages.gitlab.kuleuven.be/crospi/) robot simulator plugin based on the
 [MuJoCo](https://mujoco.org/) physics engine.
 
@@ -414,3 +416,4 @@ under the grant agreement No. <a href="https://cordis.europa.eu/project/id/10105
 (c) 2026, KU Leuven, Department of Mechanical Engineering, ROB-Group:
 
 - [Santiago Iregui Rincon](https://www.kuleuven.be/wieiswie/en/person/00125886)
+- Claude code
