@@ -1,0 +1,5 @@
+<library path="mujoco_robotsimulator_crospi">
+  <class type="etasl::mujoco_robotsimulator_crospi" base_class_type="etasl::RobotSimulator">
+    <description>Crospi robot simulator that simulates a robot loaded from a URDF file with the MuJoCo physics engine (kinematic, position servo or velocity servo control).</description>
+  </class>
+</library>

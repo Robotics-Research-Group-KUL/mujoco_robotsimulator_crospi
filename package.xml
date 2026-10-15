@@ -1,0 +1,52 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>mujoco_robotsimulator_crospi</name>
+  <version>0.1.0</version>
+  <description>
+    Crospi RobotSimulator plugin that simulates a robot (loaded from a URDF file) with the MuJoCo physics engine.
+    It supports kinematic simulation and dynamic simulation with a joint-level position or velocity servo,
+    optional environment MJCF scenes, Cartesian/wrench feedback, and live visualization through ROS 2 topics.
+  </description>
+  <maintainer email="santiago.iregui@kuleuven.be">Santiago Iregui</maintainer>
+  <license>LGPL-3.0-only</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>pluginlib</depend>
+  <depend>crospi_core</depend>
+  <depend>rclcpp</depend>
+  <depend>std_msgs</depend>
+  <depend>ament_index_cpp</depend>
+  <!-- Required by the link interface of crospi_core::crospi_utils -->
+  <depend>crospi_interfaces</depend>
+  <depend>etasl_wrapper</depend>
+  <depend>eigen</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>rclcpp_action</depend>
+  <depend>resource_retriever</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+
+  <!-- MuJoCo (>= 3.3, C API with mjSpec) is not available as a rosdep key. See README.md for how it is located at build time. -->
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <!-- Used by scripts/run_crospi_tasks.py (end-to-end test with the crospi_node) -->
+  <exec_depend>betfsm</exec_depend>
+  <exec_depend>betfsm_ros</exec_depend>
+  <exec_depend>betfsm_crospi</exec_depend>
+  <exec_depend>betfsm_demos</exec_depend>
+  <!-- The test setup uses the UR10e meshes from ur_description (Universal_Robots_ROS2_Description). -->
+  <exec_depend>ur_description</exec_depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
