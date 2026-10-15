@@ -1,0 +1,31 @@
+# colcon / CMake build artifacts (if built from inside the package)
+build/
+install/
+log/
+CMakeCache.txt
+CMakeFiles/
+compile_commands.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Simulation outputs
+*.csv
+*.mjb
+MUJOCO_LOG.TXT
+core
+core.*
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Claude Code local settings (CLAUDE.md is tracked)
+.claude/settings.local.json
