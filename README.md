@@ -43,7 +43,7 @@ ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
 
 # Terminal 2: UR10e with a position servo, next to a table with a box, for 20 s in real time
 ros2 run mujoco_robotsimulator_crospi test_mujoco_robotsimulator \
-    --config "\$[mujoco_robotsimulator_crospi]/config/ur10e_position_servo.setup.json" \
+    --config "\$[mujoco_robotsimulator_crospi]/config/setups/ur10e_position_servo.setup.json" \
     --simulator-index 0 --duration 20 --amplitude 0.5 --frequency 0.25 \
     --real-time true --csv /tmp/mujoco_test.csv
 ```
@@ -55,7 +55,7 @@ At the end, it prints the tracking error with respect to the ideal motion and wr
 ```bash
 # Terminal 1: crospi node using the MuJoCo simulator
 ros2 run crospi_core crospi_node --ros-args \
-    -p config_file:="\$[mujoco_robotsimulator_crospi]/config/ur10e_position_servo.setup.json" \
+    -p config_file:="\$[mujoco_robotsimulator_crospi]/config/setups/ur10e_position_servo.setup.json" \
     -p simulation:=true
 
 # Terminal 2: viewer
@@ -181,7 +181,7 @@ The simulator is configured as an entry of `robot/robotsimulators` in the crospi
 `"is-mujoco_robotsimulator_crospi": true`. Every parameter is documented in the
 [JSON schema](json_schemas/mujoco_robotsimulator_crospi.schema.json) (with an IDE such as VS Code, autocompletion and
 documentation are available). Complete example:
-[config/ur10e_position_servo.setup.json](config/ur10e_position_servo.setup.json):
+[config/setups/ur10e_position_servo.setup.json](config/setups/ur10e_position_servo.setup.json):
 
 ```json
 {
@@ -336,9 +336,14 @@ The generators write the environments next to themselves (in their own folder), 
 
 | Path | Description |
 |------|-------------|
-| [config/ur10e_kinematic.setup.json](config/ur10e_kinematic.setup.json) | Kinematic mode, ground plane, viewer, publishes `joint_state`, `tcp_pose`, `tcp_twist` |
-| [config/ur10e_position_servo.setup.json](config/ur10e_position_servo.setup.json) | Position servo in the table environment, all feedback, viewer, publishes all sensors |
-| [config/ur10e_velocity_servo.setup.json](config/ur10e_velocity_servo.setup.json) | Velocity servo, ground plane, no viewer, publishes all sensors (`joint_state`) |
+| [config/setups/ur10e_kinematic.setup.json](config/setups/ur10e_kinematic.setup.json) | Kinematic mode, ground plane, viewer, publishes `joint_state`, `tcp_pose`, `tcp_twist` |
+| [config/setups/ur10e_position_servo.setup.json](config/setups/ur10e_position_servo.setup.json) | Position servo in the table environment, all feedback, viewer, publishes all sensors |
+| [config/setups/ur10e_velocity_servo.setup.json](config/setups/ur10e_velocity_servo.setup.json) | Velocity servo, ground plane, no viewer, publishes all sensors (`joint_state`) |
+| [config/setups/ur10e_pick_and_place.setup.json](config/setups/ur10e_pick_and_place.setup.json) | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `pick_and_place/table_with_box.xml` |
+| [config/setups/ur10e_guarded_motions.setup.json](config/setups/ur10e_guarded_motions.setup.json) | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `guarded_motions/table_with_corner.xml` |
+| [config/setups/ur10e_contour_following.setup.json](config/setups/ur10e_contour_following.setup.json) | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `contour_following/table_with_circular_contour.xml` (other contours: change `environment_mjcf_path`) |
+| [config/setups/ur10e_peg_insertion_cylindrical.setup.json](config/setups/ur10e_peg_insertion_cylindrical.setup.json) | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `peg_insertion_cylindrical/table_with_hole_1mm_clearance.xml` (other clearances: change `environment_mjcf_path`) |
+| [config/setups/ur10e_peg_insertion_rectangular.setup.json](config/setups/ur10e_peg_insertion_rectangular.setup.json) | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `peg_insertion_rectangular/table_with_rectangular_hole_1mm_clearance.xml` and the rectangular tool `ur10e_rectangular_tool.urdf` as peg, in the simulator and in the `default_robot_specification` (other clearances: change `environment_mjcf_path`) |
 | [config/urdf/ur10e_cylinder_tool.urdf](config/urdf/ur10e_cylinder_tool.urdf) | UR10e with a cylindrical contact tool (used by all the example setups): link `cylinder_tool` (15 cm long, 3 cm diameter, solid aluminium, 0.286 kg) fixed to `tool0` along its +z axis, and the frame `tool_tip` at the center of its free end. With `tcp_link = tool0`, the wrench of contacts on the cylinder is reported at `tool0`, as a force/torque sensor between flange and tool |
 | [config/urdf/ur10e_rectangular_tool.urdf](config/urdf/ur10e_rectangular_tool.urdf) | UR10e with a rectangular contact tool / peg: link `rectangular_tool` (cross-section 30 mm along x of `tool0` x 20 mm along y of `tool0`, 15 cm long, solid aluminium, 0.243 kg) fixed to `tool0` along its +z axis, and the frame `tool_tip` at the center of its free end. Use it (in `urdf_path` of the simulator and of the `default_robot_specification`) with the rectangular peg-in-hole environments |
 | [config/urdf/ur10e.urdf](config/urdf/ur10e.urdf) | Plain UR10e URDF generated from `ur_description` (meshes from `package://ur_description`), without tool |
@@ -351,7 +356,9 @@ The generators write the environments next to themselves (in their own folder), 
 | [config/environments/peg_insertion_rectangular/table_with_rectangular_hole_{0.1,0.5,1,2}mm_clearance.xml](config/environments/peg_insertion_rectangular/) | Rectangular peg-in-hole with the peg of `ur10e_rectangular_tool.urdf` (30 x 20 mm): same block, depth, contact properties, sensors and timestep requirement as the cylindrical holes, with a rectangular hole of **diametral** clearance 0.1, 0.5, 1 or 2 mm in each direction (hole 30.1 x 20.1 / 30.5 x 20.5 / 31 x 21 / 32 x 22 mm), sharp edges. The hole is centered on the axis of the peg at `MoveHome` and aligned with it (rotated by -0.000789 rad about z, the yaw of `tool0` at `MoveHome`): a straight vertical motion from `MoveHome` inserts the peg. Additional sensor `hole_orientation` (ground-truth quaternion of the hole frame). Generated with [generate_rectangular_peg_in_hole_environments.py](config/environments/peg_insertion_rectangular/generate_rectangular_peg_in_hole_environments.py) (other clearances: `python3 generate_rectangular_peg_in_hole_environments.py <clearance_mm> ...`) |
 | [betfsm_tasks_examples/betfsm_demos_tasks.json](betfsm_tasks_examples/betfsm_demos_tasks.json) | Task list for `run_crospi_tasks.py`. `MoveHome`, `sine`, `MoveBSpline`, `MoveBSplineCVel` use task specifications of `betfsm_demos`; `MovingDown`/`MovingUp` require `crospi_application_template` |
 
-Each setup file is a complete crospi setup: one simulator (the crospi_node constructs all the entries of
+The setup files are in `config/setups/`: three examples of the control modes and one setup per task (one per folder of
+`config/environments/`). All of them use the cylindrical tool (`ur10e_cylinder_tool.urdf`), except
+`ur10e_peg_insertion_rectangular.setup.json`, which uses the rectangular tool (`ur10e_rectangular_tool.urdf`). Each setup file is a complete crospi setup: one simulator (the crospi_node constructs all the entries of
 `robotsimulators`), a `default_robot_specification` with the same URDF, a `JointStateOutputHandler` (`/joint_states`)
 and `"$defs": {}` (required by the crospi_node). They do not reference a bundled `"$schema"`; to use them inside an
 application package (e.g. `crospi_application_template`), add the schema of this package to the bundled schema of

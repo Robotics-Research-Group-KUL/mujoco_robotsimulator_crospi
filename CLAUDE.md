@@ -19,13 +19,13 @@ There are no unit tests; verify changes by running the executables:
 # plugin alone, all three modes (prints the max tracking error; kinematic ≈ 1e-5, servos < 0.07 rad)
 for m in kinematic position_servo velocity_servo; do
   ros2 run mujoco_robotsimulator_crospi test_mujoco_robotsimulator \
-    --config "\$[mujoco_robotsimulator_crospi]/config/ur10e_$m.setup.json" --simulator-index 0 \
+    --config "\$[mujoco_robotsimulator_crospi]/config/setups/ur10e_$m.setup.json" --simulator-index 0 \
     --duration 4 --amplitude 0.5 --frequency 0.25 --real-time false --csv none
 done
 
 # end-to-end: crospi_node + BeTFSM tasks (expect "Finished with outcome SUCCEED")
 /opt/ros2_crospi_ws/install/crospi_core/lib/crospi_core/crospi_node --ros-args \
-  -p config_file:='$[mujoco_robotsimulator_crospi]/config/ur10e_position_servo.setup.json' -p simulation:=true &
+  -p config_file:='$[mujoco_robotsimulator_crospi]/config/setups/ur10e_position_servo.setup.json' -p simulation:=true &
 ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_robotsimulator_crospi]/betfsm_tasks_examples/betfsm_demos_tasks.json' \
   --tasks MoveHome --repetitions 1 --tick-frequency 100 --publish-frequency 5
 ```
@@ -62,7 +62,7 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_
   available sensors.
 - **Never put `default` in the JSON schema**: the crospi blackboard (`BlackBoard::process_and_validate`) inserts schema
   defaults for missing properties, which would silently enable features / hide missing parameters. Use `examples`.
-- Keep the schema, `parse_config`, the README parameter table and the example `config/*.setup.json` in sync.
+- Keep the schema, `parse_config`, the README parameter table and the example `config/setups/*.setup.json` in sync.
 - Follow the template conventions: namespace `etasl`, `PLUGINLIB_EXPORT_CLASS(..., etasl::RobotDriver)` while
   `plugins.xml` uses `base_class_type="etasl::RobotSimulator"`, errors built with `fmt::format`.
 

@@ -21,7 +21,7 @@ End-to-end test of a crospi simulator: executes a sequence of crospi tasks (with
 
 Start the crospi_node first with a setup file that uses the MuJoCo simulator, e.g.:
   ros2 run crospi_core crospi_node --ros-args \\
-      -p config_file:="\\$[mujoco_robotsimulator_crospi]/config/ur10e_position_servo.setup.json" -p simulation:=true
+      -p config_file:="\\$[mujoco_robotsimulator_crospi]/config/setups/ur10e_position_servo.setup.json" -p simulation:=true
 
 All arguments are required:
   --task-list <file>            BeTFSM/crospi task list ($[package] paths are supported)
