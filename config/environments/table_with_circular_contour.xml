@@ -1,0 +1,267 @@
+<!--
+  Environment for contour following with force feedback, for mujoco_robotsimulator_crospi.
+
+  A table with a hollow circular contour on top of it: a ring-shaped wall whose INNER face is a circle of
+  diameter 0.35 m (radius 0.175) centered at (0.174, -0.615) in the world, 8 cm high, on the table top (z = 0.15).
+  Designed for the UR10e with the cylindrical contact tool (urdf/ur10e_cylinder_tool.urdf: 15 cm long, 3 cm diameter,
+  fixed to tool0) pointing down. At the joints [4.7116, -1.5708, 2.0944, -2.0944, -1.5708, 0] the tool tip is at
+  (0.174, -0.615, 0.241), i.e. right above the center of the contour, 9 cm above the table. Intended sequence:
+    1. move down (-z) into the ring until contact with the table top (z = 0.15)
+    2. move radially (any direction in the xy plane) until contact with the inner face of the ring
+       (the tool axis is then at 0.160 m from the center)
+    3. follow the contour (tangential motion) while regulating the normal (radial) contact force
+  The whole contour is reachable with the tool pointing down (checked with the UR10e: inverse kinematics along the
+  contour within the joint limits, far from singularities).
+
+  The ring is made of 180 box segments (MuJoCo replaces concave meshes by their convex hull, so a single ring mesh
+  cannot be used). Their inner faces form a regular 180-gon with apothem 0.175: the deviation from the circle is
+  at most 0.03 mm, with a change of direction of 2 degrees between facets.
+  The outer face (diameter 0.41 m) can also be used for contour following from the outside.
+  This file was generated with a script (ring segments: pos = (r cos a, r sin a), euler = (0, 0, a)).
+
+  All coordinates are in the world frame of the simulation (with the identity base pose of the simulator
+  configuration, world = robot base_link).
+
+  Sensors (published by the simulator on <topic_namespace>/mujoco_sensors/<name>):
+    - table_touch:   normal contact force [N] on the table top
+    - contour_touch: normal contact force [N] on the ring (inner or outer face)
+    - contour_center: ground-truth position of the center of the contour at the table top [m]
+
+  The physics options (timestep, gravity, integrator, contacts) are set by the simulator configuration.
+-->
+<mujoco model="table_with_circular_contour">
+  <compiler angle="radian"/>
+
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.6 0.6 0.6"/>
+  </visual>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.2 0.3 0.4" rgb2="0.3 0.4 0.5" width="512" height="512"/>
+    <material name="grid" texture="grid" texrepeat="4 4" reflectance="0.1"/>
+    <material name="wood" rgba="0.55 0.4 0.3 1"/>
+    <material name="steel" rgba="0.6 0.62 0.65 1" specular="0.6" shininess="0.6"/>
+  </asset>
+
+  <default>
+    <!-- Rigid, static contact surfaces for force control during sliding:
+         - priority 1: these contact parameters are used (instead of mixing them with those of the robot geoms);
+         - solref timeconst 0.02 s, critically damped, and solimp 0.9-0.95 (MuJoCo defaults): stiff contact (about
+           0.01 mm penetration at 10 N) that is still compliant enough to avoid force chattering while sliding along
+           the contour (a stiffer contact, e.g. solref 0.005, makes the instantaneous contact force jump between 0 and
+           2x its mean value);
+         - friction: moderate sliding friction (0.3) so that the tool can slide along the contour while pressing on it,
+           small torsional and rolling friction;
+         - condim 3: normal force + 2D tangential friction. -->
+    <default class="rigid_surface">
+      <geom priority="1" condim="3" friction="0.3 0.005 0.0001" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <light name="top" pos="0 0 3" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="0 0 0.05" material="grid"/>
+
+    <!-- Table: 0.8 x 0.7 m, top surface at z = 0.15 m, centered at (0.174, -0.615) -->
+    <body name="table" pos="0.174 -0.615 0.075">
+      <geom name="table_top" class="rigid_surface" type="box" size="0.4 0.35 0.075" material="wood"/>
+      <!-- Touch volume of the table top (invisible, non-colliding) -->
+      <site name="table_top_surface" type="box" pos="0 0 0.075" size="0.4 0.35 0.005" group="4" rgba="0 1 0 0.2"/>
+
+      <!-- Circular contour: ring wall, inner radius 0.175, thickness 0.03, height 0.08, centered on the table -->
+      <body name="contour" pos="0 0 0.075">
+        <geom name="ring_000" class="rigid_surface" type="box" pos="0.190000 0.000000 0.04" euler="0 0 0.000000" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_001" class="rigid_surface" type="box" pos="0.189884 0.006631 0.04" euler="0 0 0.034907" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_002" class="rigid_surface" type="box" pos="0.189537 0.013254 0.04" euler="0 0 0.069813" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_003" class="rigid_surface" type="box" pos="0.188959 0.019860 0.04" euler="0 0 0.104720" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_004" class="rigid_surface" type="box" pos="0.188151 0.026443 0.04" euler="0 0 0.139626" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_005" class="rigid_surface" type="box" pos="0.187113 0.032993 0.04" euler="0 0 0.174533" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_006" class="rigid_surface" type="box" pos="0.185848 0.039503 0.04" euler="0 0 0.209440" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_007" class="rigid_surface" type="box" pos="0.184356 0.045965 0.04" euler="0 0 0.244346" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_008" class="rigid_surface" type="box" pos="0.182640 0.052371 0.04" euler="0 0 0.279253" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_009" class="rigid_surface" type="box" pos="0.180701 0.058713 0.04" euler="0 0 0.314159" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_010" class="rigid_surface" type="box" pos="0.178542 0.064984 0.04" euler="0 0 0.349066" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_011" class="rigid_surface" type="box" pos="0.176165 0.071175 0.04" euler="0 0 0.383972" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_012" class="rigid_surface" type="box" pos="0.173574 0.077280 0.04" euler="0 0 0.418879" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_013" class="rigid_surface" type="box" pos="0.170771 0.083291 0.04" euler="0 0 0.453786" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_014" class="rigid_surface" type="box" pos="0.167760 0.089200 0.04" euler="0 0 0.488692" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_015" class="rigid_surface" type="box" pos="0.164545 0.095000 0.04" euler="0 0 0.523599" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_016" class="rigid_surface" type="box" pos="0.161129 0.100685 0.04" euler="0 0 0.558505" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_017" class="rigid_surface" type="box" pos="0.157517 0.106247 0.04" euler="0 0 0.593412" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_018" class="rigid_surface" type="box" pos="0.153713 0.111679 0.04" euler="0 0 0.628319" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_019" class="rigid_surface" type="box" pos="0.149722 0.116976 0.04" euler="0 0 0.663225" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_020" class="rigid_surface" type="box" pos="0.145548 0.122130 0.04" euler="0 0 0.698132" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_021" class="rigid_surface" type="box" pos="0.141198 0.127135 0.04" euler="0 0 0.733038" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_022" class="rigid_surface" type="box" pos="0.136675 0.131985 0.04" euler="0 0 0.767945" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_023" class="rigid_surface" type="box" pos="0.131985 0.136675 0.04" euler="0 0 0.802851" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_024" class="rigid_surface" type="box" pos="0.127135 0.141198 0.04" euler="0 0 0.837758" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_025" class="rigid_surface" type="box" pos="0.122130 0.145548 0.04" euler="0 0 0.872665" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_026" class="rigid_surface" type="box" pos="0.116976 0.149722 0.04" euler="0 0 0.907571" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_027" class="rigid_surface" type="box" pos="0.111679 0.153713 0.04" euler="0 0 0.942478" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_028" class="rigid_surface" type="box" pos="0.106247 0.157517 0.04" euler="0 0 0.977384" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_029" class="rigid_surface" type="box" pos="0.100685 0.161129 0.04" euler="0 0 1.012291" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_030" class="rigid_surface" type="box" pos="0.095000 0.164545 0.04" euler="0 0 1.047198" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_031" class="rigid_surface" type="box" pos="0.089200 0.167760 0.04" euler="0 0 1.082104" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_032" class="rigid_surface" type="box" pos="0.083291 0.170771 0.04" euler="0 0 1.117011" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_033" class="rigid_surface" type="box" pos="0.077280 0.173574 0.04" euler="0 0 1.151917" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_034" class="rigid_surface" type="box" pos="0.071175 0.176165 0.04" euler="0 0 1.186824" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_035" class="rigid_surface" type="box" pos="0.064984 0.178542 0.04" euler="0 0 1.221730" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_036" class="rigid_surface" type="box" pos="0.058713 0.180701 0.04" euler="0 0 1.256637" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_037" class="rigid_surface" type="box" pos="0.052371 0.182640 0.04" euler="0 0 1.291544" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_038" class="rigid_surface" type="box" pos="0.045965 0.184356 0.04" euler="0 0 1.326450" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_039" class="rigid_surface" type="box" pos="0.039503 0.185848 0.04" euler="0 0 1.361357" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_040" class="rigid_surface" type="box" pos="0.032993 0.187113 0.04" euler="0 0 1.396263" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_041" class="rigid_surface" type="box" pos="0.026443 0.188151 0.04" euler="0 0 1.431170" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_042" class="rigid_surface" type="box" pos="0.019860 0.188959 0.04" euler="0 0 1.466077" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_043" class="rigid_surface" type="box" pos="0.013254 0.189537 0.04" euler="0 0 1.500983" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_044" class="rigid_surface" type="box" pos="0.006631 0.189884 0.04" euler="0 0 1.535890" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_045" class="rigid_surface" type="box" pos="0.000000 0.190000 0.04" euler="0 0 1.570796" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_046" class="rigid_surface" type="box" pos="-0.006631 0.189884 0.04" euler="0 0 1.605703" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_047" class="rigid_surface" type="box" pos="-0.013254 0.189537 0.04" euler="0 0 1.640609" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_048" class="rigid_surface" type="box" pos="-0.019860 0.188959 0.04" euler="0 0 1.675516" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_049" class="rigid_surface" type="box" pos="-0.026443 0.188151 0.04" euler="0 0 1.710423" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_050" class="rigid_surface" type="box" pos="-0.032993 0.187113 0.04" euler="0 0 1.745329" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_051" class="rigid_surface" type="box" pos="-0.039503 0.185848 0.04" euler="0 0 1.780236" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_052" class="rigid_surface" type="box" pos="-0.045965 0.184356 0.04" euler="0 0 1.815142" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_053" class="rigid_surface" type="box" pos="-0.052371 0.182640 0.04" euler="0 0 1.850049" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_054" class="rigid_surface" type="box" pos="-0.058713 0.180701 0.04" euler="0 0 1.884956" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_055" class="rigid_surface" type="box" pos="-0.064984 0.178542 0.04" euler="0 0 1.919862" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_056" class="rigid_surface" type="box" pos="-0.071175 0.176165 0.04" euler="0 0 1.954769" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_057" class="rigid_surface" type="box" pos="-0.077280 0.173574 0.04" euler="0 0 1.989675" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_058" class="rigid_surface" type="box" pos="-0.083291 0.170771 0.04" euler="0 0 2.024582" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_059" class="rigid_surface" type="box" pos="-0.089200 0.167760 0.04" euler="0 0 2.059489" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_060" class="rigid_surface" type="box" pos="-0.095000 0.164545 0.04" euler="0 0 2.094395" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_061" class="rigid_surface" type="box" pos="-0.100685 0.161129 0.04" euler="0 0 2.129302" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_062" class="rigid_surface" type="box" pos="-0.106247 0.157517 0.04" euler="0 0 2.164208" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_063" class="rigid_surface" type="box" pos="-0.111679 0.153713 0.04" euler="0 0 2.199115" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_064" class="rigid_surface" type="box" pos="-0.116976 0.149722 0.04" euler="0 0 2.234021" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_065" class="rigid_surface" type="box" pos="-0.122130 0.145548 0.04" euler="0 0 2.268928" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_066" class="rigid_surface" type="box" pos="-0.127135 0.141198 0.04" euler="0 0 2.303835" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_067" class="rigid_surface" type="box" pos="-0.131985 0.136675 0.04" euler="0 0 2.338741" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_068" class="rigid_surface" type="box" pos="-0.136675 0.131985 0.04" euler="0 0 2.373648" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_069" class="rigid_surface" type="box" pos="-0.141198 0.127135 0.04" euler="0 0 2.408554" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_070" class="rigid_surface" type="box" pos="-0.145548 0.122130 0.04" euler="0 0 2.443461" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_071" class="rigid_surface" type="box" pos="-0.149722 0.116976 0.04" euler="0 0 2.478368" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_072" class="rigid_surface" type="box" pos="-0.153713 0.111679 0.04" euler="0 0 2.513274" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_073" class="rigid_surface" type="box" pos="-0.157517 0.106247 0.04" euler="0 0 2.548181" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_074" class="rigid_surface" type="box" pos="-0.161129 0.100685 0.04" euler="0 0 2.583087" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_075" class="rigid_surface" type="box" pos="-0.164545 0.095000 0.04" euler="0 0 2.617994" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_076" class="rigid_surface" type="box" pos="-0.167760 0.089200 0.04" euler="0 0 2.652900" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_077" class="rigid_surface" type="box" pos="-0.170771 0.083291 0.04" euler="0 0 2.687807" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_078" class="rigid_surface" type="box" pos="-0.173574 0.077280 0.04" euler="0 0 2.722714" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_079" class="rigid_surface" type="box" pos="-0.176165 0.071175 0.04" euler="0 0 2.757620" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_080" class="rigid_surface" type="box" pos="-0.178542 0.064984 0.04" euler="0 0 2.792527" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_081" class="rigid_surface" type="box" pos="-0.180701 0.058713 0.04" euler="0 0 2.827433" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_082" class="rigid_surface" type="box" pos="-0.182640 0.052371 0.04" euler="0 0 2.862340" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_083" class="rigid_surface" type="box" pos="-0.184356 0.045965 0.04" euler="0 0 2.897247" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_084" class="rigid_surface" type="box" pos="-0.185848 0.039503 0.04" euler="0 0 2.932153" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_085" class="rigid_surface" type="box" pos="-0.187113 0.032993 0.04" euler="0 0 2.967060" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_086" class="rigid_surface" type="box" pos="-0.188151 0.026443 0.04" euler="0 0 3.001966" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_087" class="rigid_surface" type="box" pos="-0.188959 0.019860 0.04" euler="0 0 3.036873" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_088" class="rigid_surface" type="box" pos="-0.189537 0.013254 0.04" euler="0 0 3.071779" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_089" class="rigid_surface" type="box" pos="-0.189884 0.006631 0.04" euler="0 0 3.106686" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_090" class="rigid_surface" type="box" pos="-0.190000 0.000000 0.04" euler="0 0 3.141593" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_091" class="rigid_surface" type="box" pos="-0.189884 -0.006631 0.04" euler="0 0 3.176499" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_092" class="rigid_surface" type="box" pos="-0.189537 -0.013254 0.04" euler="0 0 3.211406" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_093" class="rigid_surface" type="box" pos="-0.188959 -0.019860 0.04" euler="0 0 3.246312" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_094" class="rigid_surface" type="box" pos="-0.188151 -0.026443 0.04" euler="0 0 3.281219" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_095" class="rigid_surface" type="box" pos="-0.187113 -0.032993 0.04" euler="0 0 3.316126" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_096" class="rigid_surface" type="box" pos="-0.185848 -0.039503 0.04" euler="0 0 3.351032" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_097" class="rigid_surface" type="box" pos="-0.184356 -0.045965 0.04" euler="0 0 3.385939" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_098" class="rigid_surface" type="box" pos="-0.182640 -0.052371 0.04" euler="0 0 3.420845" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_099" class="rigid_surface" type="box" pos="-0.180701 -0.058713 0.04" euler="0 0 3.455752" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_100" class="rigid_surface" type="box" pos="-0.178542 -0.064984 0.04" euler="0 0 3.490659" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_101" class="rigid_surface" type="box" pos="-0.176165 -0.071175 0.04" euler="0 0 3.525565" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_102" class="rigid_surface" type="box" pos="-0.173574 -0.077280 0.04" euler="0 0 3.560472" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_103" class="rigid_surface" type="box" pos="-0.170771 -0.083291 0.04" euler="0 0 3.595378" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_104" class="rigid_surface" type="box" pos="-0.167760 -0.089200 0.04" euler="0 0 3.630285" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_105" class="rigid_surface" type="box" pos="-0.164545 -0.095000 0.04" euler="0 0 3.665191" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_106" class="rigid_surface" type="box" pos="-0.161129 -0.100685 0.04" euler="0 0 3.700098" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_107" class="rigid_surface" type="box" pos="-0.157517 -0.106247 0.04" euler="0 0 3.735005" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_108" class="rigid_surface" type="box" pos="-0.153713 -0.111679 0.04" euler="0 0 3.769911" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_109" class="rigid_surface" type="box" pos="-0.149722 -0.116976 0.04" euler="0 0 3.804818" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_110" class="rigid_surface" type="box" pos="-0.145548 -0.122130 0.04" euler="0 0 3.839724" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_111" class="rigid_surface" type="box" pos="-0.141198 -0.127135 0.04" euler="0 0 3.874631" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_112" class="rigid_surface" type="box" pos="-0.136675 -0.131985 0.04" euler="0 0 3.909538" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_113" class="rigid_surface" type="box" pos="-0.131985 -0.136675 0.04" euler="0 0 3.944444" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_114" class="rigid_surface" type="box" pos="-0.127135 -0.141198 0.04" euler="0 0 3.979351" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_115" class="rigid_surface" type="box" pos="-0.122130 -0.145548 0.04" euler="0 0 4.014257" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_116" class="rigid_surface" type="box" pos="-0.116976 -0.149722 0.04" euler="0 0 4.049164" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_117" class="rigid_surface" type="box" pos="-0.111679 -0.153713 0.04" euler="0 0 4.084070" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_118" class="rigid_surface" type="box" pos="-0.106247 -0.157517 0.04" euler="0 0 4.118977" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_119" class="rigid_surface" type="box" pos="-0.100685 -0.161129 0.04" euler="0 0 4.153884" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_120" class="rigid_surface" type="box" pos="-0.095000 -0.164545 0.04" euler="0 0 4.188790" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_121" class="rigid_surface" type="box" pos="-0.089200 -0.167760 0.04" euler="0 0 4.223697" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_122" class="rigid_surface" type="box" pos="-0.083291 -0.170771 0.04" euler="0 0 4.258603" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_123" class="rigid_surface" type="box" pos="-0.077280 -0.173574 0.04" euler="0 0 4.293510" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_124" class="rigid_surface" type="box" pos="-0.071175 -0.176165 0.04" euler="0 0 4.328417" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_125" class="rigid_surface" type="box" pos="-0.064984 -0.178542 0.04" euler="0 0 4.363323" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_126" class="rigid_surface" type="box" pos="-0.058713 -0.180701 0.04" euler="0 0 4.398230" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_127" class="rigid_surface" type="box" pos="-0.052371 -0.182640 0.04" euler="0 0 4.433136" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_128" class="rigid_surface" type="box" pos="-0.045965 -0.184356 0.04" euler="0 0 4.468043" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_129" class="rigid_surface" type="box" pos="-0.039503 -0.185848 0.04" euler="0 0 4.502949" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_130" class="rigid_surface" type="box" pos="-0.032993 -0.187113 0.04" euler="0 0 4.537856" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_131" class="rigid_surface" type="box" pos="-0.026443 -0.188151 0.04" euler="0 0 4.572763" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_132" class="rigid_surface" type="box" pos="-0.019860 -0.188959 0.04" euler="0 0 4.607669" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_133" class="rigid_surface" type="box" pos="-0.013254 -0.189537 0.04" euler="0 0 4.642576" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_134" class="rigid_surface" type="box" pos="-0.006631 -0.189884 0.04" euler="0 0 4.677482" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_135" class="rigid_surface" type="box" pos="-0.000000 -0.190000 0.04" euler="0 0 4.712389" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_136" class="rigid_surface" type="box" pos="0.006631 -0.189884 0.04" euler="0 0 4.747296" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_137" class="rigid_surface" type="box" pos="0.013254 -0.189537 0.04" euler="0 0 4.782202" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_138" class="rigid_surface" type="box" pos="0.019860 -0.188959 0.04" euler="0 0 4.817109" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_139" class="rigid_surface" type="box" pos="0.026443 -0.188151 0.04" euler="0 0 4.852015" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_140" class="rigid_surface" type="box" pos="0.032993 -0.187113 0.04" euler="0 0 4.886922" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_141" class="rigid_surface" type="box" pos="0.039503 -0.185848 0.04" euler="0 0 4.921828" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_142" class="rigid_surface" type="box" pos="0.045965 -0.184356 0.04" euler="0 0 4.956735" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_143" class="rigid_surface" type="box" pos="0.052371 -0.182640 0.04" euler="0 0 4.991642" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_144" class="rigid_surface" type="box" pos="0.058713 -0.180701 0.04" euler="0 0 5.026548" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_145" class="rigid_surface" type="box" pos="0.064984 -0.178542 0.04" euler="0 0 5.061455" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_146" class="rigid_surface" type="box" pos="0.071175 -0.176165 0.04" euler="0 0 5.096361" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_147" class="rigid_surface" type="box" pos="0.077280 -0.173574 0.04" euler="0 0 5.131268" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_148" class="rigid_surface" type="box" pos="0.083291 -0.170771 0.04" euler="0 0 5.166175" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_149" class="rigid_surface" type="box" pos="0.089200 -0.167760 0.04" euler="0 0 5.201081" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_150" class="rigid_surface" type="box" pos="0.095000 -0.164545 0.04" euler="0 0 5.235988" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_151" class="rigid_surface" type="box" pos="0.100685 -0.161129 0.04" euler="0 0 5.270894" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_152" class="rigid_surface" type="box" pos="0.106247 -0.157517 0.04" euler="0 0 5.305801" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_153" class="rigid_surface" type="box" pos="0.111679 -0.153713 0.04" euler="0 0 5.340708" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_154" class="rigid_surface" type="box" pos="0.116976 -0.149722 0.04" euler="0 0 5.375614" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_155" class="rigid_surface" type="box" pos="0.122130 -0.145548 0.04" euler="0 0 5.410521" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_156" class="rigid_surface" type="box" pos="0.127135 -0.141198 0.04" euler="0 0 5.445427" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_157" class="rigid_surface" type="box" pos="0.131985 -0.136675 0.04" euler="0 0 5.480334" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_158" class="rigid_surface" type="box" pos="0.136675 -0.131985 0.04" euler="0 0 5.515240" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_159" class="rigid_surface" type="box" pos="0.141198 -0.127135 0.04" euler="0 0 5.550147" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_160" class="rigid_surface" type="box" pos="0.145548 -0.122130 0.04" euler="0 0 5.585054" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_161" class="rigid_surface" type="box" pos="0.149722 -0.116976 0.04" euler="0 0 5.619960" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_162" class="rigid_surface" type="box" pos="0.153713 -0.111679 0.04" euler="0 0 5.654867" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_163" class="rigid_surface" type="box" pos="0.157517 -0.106247 0.04" euler="0 0 5.689773" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_164" class="rigid_surface" type="box" pos="0.161129 -0.100685 0.04" euler="0 0 5.724680" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_165" class="rigid_surface" type="box" pos="0.164545 -0.095000 0.04" euler="0 0 5.759587" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_166" class="rigid_surface" type="box" pos="0.167760 -0.089200 0.04" euler="0 0 5.794493" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_167" class="rigid_surface" type="box" pos="0.170771 -0.083291 0.04" euler="0 0 5.829400" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_168" class="rigid_surface" type="box" pos="0.173574 -0.077280 0.04" euler="0 0 5.864306" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_169" class="rigid_surface" type="box" pos="0.176165 -0.071175 0.04" euler="0 0 5.899213" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_170" class="rigid_surface" type="box" pos="0.178542 -0.064984 0.04" euler="0 0 5.934119" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_171" class="rigid_surface" type="box" pos="0.180701 -0.058713 0.04" euler="0 0 5.969026" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_172" class="rigid_surface" type="box" pos="0.182640 -0.052371 0.04" euler="0 0 6.003933" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_173" class="rigid_surface" type="box" pos="0.184356 -0.045965 0.04" euler="0 0 6.038839" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_174" class="rigid_surface" type="box" pos="0.185848 -0.039503 0.04" euler="0 0 6.073746" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_175" class="rigid_surface" type="box" pos="0.187113 -0.032993 0.04" euler="0 0 6.108652" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_176" class="rigid_surface" type="box" pos="0.188151 -0.026443 0.04" euler="0 0 6.143559" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_177" class="rigid_surface" type="box" pos="0.188959 -0.019860 0.04" euler="0 0 6.178466" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_178" class="rigid_surface" type="box" pos="0.189537 -0.013254 0.04" euler="0 0 6.213372" size="0.015 0.003578 0.04" material="steel"/>
+        <geom name="ring_179" class="rigid_surface" type="box" pos="0.189884 -0.006631 0.04" euler="0 0 6.248279" size="0.015 0.003578 0.04" material="steel"/>
+        <!-- Touch volume of the ring (only contacts with the ring geoms are counted) -->
+        <site name="contour_volume" type="cylinder" pos="0 0 0.04" size="0.215 0.045" group="4" rgba="0 1 0 0.1"/>
+        <!-- Ground truth: center of the contour at the table top -->
+        <site name="contour_center" type="sphere" pos="0 0 0" size="0.006" rgba="1 0.1 0.1 1"/>
+      </body>
+    </body>
+  </worldbody>
+
+  <!-- MuJoCo sensors: published by the simulator on <topic_namespace>/mujoco_sensors/<name> -->
+  <sensor>
+    <touch name="table_touch" site="table_top_surface"/>
+    <touch name="contour_touch" site="contour_volume"/>
+    <framepos name="contour_center" objtype="site" objname="contour_center"/>
+  </sensor>
+</mujoco>
