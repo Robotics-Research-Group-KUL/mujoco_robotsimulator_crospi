@@ -62,6 +62,9 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_
   available sensors.
 - **Never put `default` in the JSON schema**: the crospi blackboard (`BlackBoard::process_and_validate`) inserts schema
   defaults for missing properties, which would silently enable features / hide missing parameters. Use `examples`.
+- `control_mode` is an object with one `is-<mode>` key + that mode's parameters (crospi discriminator convention,
+  schema `dependencies` keyed by `is-<mode>`); the old flat format (string `control_mode`, top-level gains) is rejected
+  with a migration message.
 - Keep the schema, `parse_config`, the README parameter table and the example `config/setups/*.setup.json` in sync.
 - Follow the template conventions: namespace `etasl`, `PLUGINLIB_EXPORT_CLASS(..., etasl::RobotDriver)` while
   `plugins.xml` uses `base_class_type="etasl::RobotSimulator"`, errors built with `fmt::format`.

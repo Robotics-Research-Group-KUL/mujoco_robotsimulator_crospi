@@ -35,10 +35,12 @@
                     "gravity": [0.0, 0.0, -9.81],
                     "contacts_enabled": true,
                     "joint_armature": [0.5, 0.5, 0.3, 0.1, 0.1, 0.1],
-                    "control_mode": "velocity_servo",
-                    "joint_damping_gains": [500.0, 500.0, 250.0, 50.0, 50.0, 50.0],
-                    "gravity_compensation": true,
-                    "clamp_torques_to_effort_limits": true,
+                    "control_mode": {
+                        "is-velocity_servo": true,
+                        "joint_damping_gains": [500.0, 500.0, 250.0, 50.0, 50.0, 50.0],
+                        "gravity_compensation": true,
+                        "clamp_torques_to_effort_limits": true
+                    },
                     "name_expr_joint_vel": "joint_vel",
                     "name_expr_joint_torque": "joint_torque",
                     "ros_node_name": "mujoco_robotsimulator",

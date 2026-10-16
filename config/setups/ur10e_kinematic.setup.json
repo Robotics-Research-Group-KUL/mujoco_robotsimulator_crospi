@@ -34,7 +34,9 @@
                     "integrator": "implicitfast",
                     "gravity": [0.0, 0.0, -9.81],
                     "contacts_enabled": true,
-                    "control_mode": "kinematic",
+                    "control_mode": {
+                        "is-kinematic": true
+                    },
                     "base_link": "base_link",
                     "tcp_link": "tool0",
                     "name_expr_joint_vel": "joint_vel",

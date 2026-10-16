@@ -238,65 +238,213 @@
                     ]
                 },
                 "control_mode": {
-                    "description": "How the joint velocity setpoints of crospi are applied. kinematic: the joint positions are the integral of the setpoints (perfect tracking, the robot cannot be stopped by contacts; the rest of the scene is simulated dynamically). position_servo: dynamic simulation where a joint PD controller tracks the integrated setpoint, tau = joint_stiffness (q_ref - q) + joint_damping_gains (qd_sp - qd). velocity_servo: dynamic simulation where a joint velocity controller tracks the setpoint, tau = joint_damping_gains (qd_sp - qd).",
-                    "type": "string",
-                    "enum": [
-                        "kinematic",
-                        "position_servo",
-                        "velocity_servo"
+                    "description": "How the joint velocity setpoints of crospi are applied to the simulated robot. The mode is selected with exactly one of the keys is-kinematic, is-position_servo or is-velocity_servo, and the parameters of the selected mode are given in the same object.",
+                    "type": "object",
+                    "properties": {
+                        "is-kinematic": {
+                            "description": "Kinematic mode: the joint positions are the integral of the setpoints (perfect tracking); the robot is not stopped by contacts, but the rest of the scene is simulated dynamically. The joint torques are computed with inverse dynamics. No parameters.",
+                            "type": "boolean",
+                            "const": true
+                        },
+                        "is-position_servo": {
+                            "description": "Dynamic simulation (forward dynamics) where a joint PD controller tracks the integrated setpoint: tau = joint_stiffness (q_ref - q) + joint_damping_gains (qd_sp - qd). Behaves like the internal position controller of an industrial robot.",
+                            "type": "boolean",
+                            "const": true
+                        },
+                        "is-velocity_servo": {
+                            "description": "Dynamic simulation (forward dynamics) where a joint velocity controller tracks the setpoint: tau = joint_damping_gains (qd_sp - qd).",
+                            "type": "boolean",
+                            "const": true
+                        }
+                    },
+                    "additionalProperties": true,
+                    "oneOf": [
+                        {
+                            "type": "object",
+                            "required": [
+                                "is-kinematic"
+                            ]
+                        },
+                        {
+                            "type": "object",
+                            "required": [
+                                "is-position_servo"
+                            ]
+                        },
+                        {
+                            "type": "object",
+                            "required": [
+                                "is-velocity_servo"
+                            ]
+                        }
                     ],
-                    "examples": [
-                        "position_servo"
-                    ]
-                },
-                "joint_stiffness": {
-                    "description": "Only for control_mode position_servo (required). Proportional gain of the joint controller for each joint in robot_joints, in [Nm/rad] or [N/m].",
-                    "type": "array",
-                    "items": {
-                        "type": "number",
-                        "minimum": 0
+                    "dependencies": {
+                        "is-kinematic": {
+                            "not": {
+                                "anyOf": [
+                                    {
+                                        "required": [
+                                            "joint_stiffness"
+                                        ]
+                                    },
+                                    {
+                                        "required": [
+                                            "joint_damping_gains"
+                                        ]
+                                    },
+                                    {
+                                        "required": [
+                                            "gravity_compensation"
+                                        ]
+                                    },
+                                    {
+                                        "required": [
+                                            "clamp_torques_to_effort_limits"
+                                        ]
+                                    }
+                                ]
+                            }
+                        },
+                        "is-position_servo": {
+                            "required": [
+                                "joint_stiffness",
+                                "joint_damping_gains",
+                                "gravity_compensation",
+                                "clamp_torques_to_effort_limits"
+                            ],
+                            "properties": {
+                                "joint_stiffness": {
+                                    "description": "Proportional gain of the joint controller for each joint in robot_joints, in [Nm/rad] or [N/m].",
+                                    "type": "array",
+                                    "items": {
+                                        "type": "number",
+                                        "minimum": 0
+                                    },
+                                    "examples": [
+                                        [
+                                            8000.0,
+                                            8000.0,
+                                            5000.0,
+                                            1000.0,
+                                            1000.0,
+                                            1000.0
+                                        ]
+                                    ]
+                                },
+                                "joint_damping_gains": {
+                                    "description": "Derivative (velocity) gain of the joint controller for each joint in robot_joints, in [Nms/rad] or [Ns/m].",
+                                    "type": "array",
+                                    "items": {
+                                        "type": "number",
+                                        "minimum": 0
+                                    },
+                                    "examples": [
+                                        [
+                                            300.0,
+                                            300.0,
+                                            150.0,
+                                            30.0,
+                                            30.0,
+                                            30.0
+                                        ]
+                                    ]
+                                },
+                                "gravity_compensation": {
+                                    "description": "If true, the weight of all the links of the robot is compensated (as done by the internal controller of most industrial robots).",
+                                    "type": "boolean",
+                                    "examples": [
+                                        true
+                                    ]
+                                },
+                                "clamp_torques_to_effort_limits": {
+                                    "description": "If true, the total motor torque (controller and gravity compensation) of each joint is limited to the effort limit of the URDF (<limit effort>).",
+                                    "type": "boolean",
+                                    "examples": [
+                                        true
+                                    ]
+                                }
+                            }
+                        },
+                        "is-velocity_servo": {
+                            "required": [
+                                "joint_damping_gains",
+                                "gravity_compensation",
+                                "clamp_torques_to_effort_limits"
+                            ],
+                            "properties": {
+                                "joint_damping_gains": {
+                                    "description": "Derivative (velocity) gain of the joint controller for each joint in robot_joints, in [Nms/rad] or [Ns/m].",
+                                    "type": "array",
+                                    "items": {
+                                        "type": "number",
+                                        "minimum": 0
+                                    },
+                                    "examples": [
+                                        [
+                                            300.0,
+                                            300.0,
+                                            150.0,
+                                            30.0,
+                                            30.0,
+                                            30.0
+                                        ]
+                                    ]
+                                },
+                                "gravity_compensation": {
+                                    "description": "If true, the weight of all the links of the robot is compensated (as done by the internal controller of most industrial robots).",
+                                    "type": "boolean",
+                                    "examples": [
+                                        true
+                                    ]
+                                },
+                                "clamp_torques_to_effort_limits": {
+                                    "description": "If true, the total motor torque (controller and gravity compensation) of each joint is limited to the effort limit of the URDF (<limit effort>).",
+                                    "type": "boolean",
+                                    "examples": [
+                                        true
+                                    ]
+                                }
+                            }
+                        }
                     },
                     "examples": [
-                        [
-                            8000.0,
-                            8000.0,
-                            5000.0,
-                            1000.0,
-                            1000.0,
-                            1000.0
-                        ]
-                    ]
-                },
-                "joint_damping_gains": {
-                    "description": "Only for control_modes position_servo and velocity_servo (required). Derivative (velocity) gain of the joint controller for each joint in robot_joints, in [Nms/rad] or [Ns/m].",
-                    "type": "array",
-                    "items": {
-                        "type": "number",
-                        "minimum": 0
-                    },
-                    "examples": [
-                        [
-                            300.0,
-                            300.0,
-                            150.0,
-                            30.0,
-                            30.0,
-                            30.0
-                        ]
-                    ]
-                },
-                "gravity_compensation": {
-                    "description": "Only for control_modes position_servo and velocity_servo (required). If true, the weight of all the links of the robot is compensated (as done by the internal controller of most industrial robots).",
-                    "type": "boolean",
-                    "examples": [
-                        true
-                    ]
-                },
-                "clamp_torques_to_effort_limits": {
-                    "description": "Only for control_modes position_servo and velocity_servo (required). If true, the total motor torque (controller and gravity compensation) of each joint is limited to the effort limit of the URDF (<limit effort>).",
-                    "type": "boolean",
-                    "examples": [
-                        true
+                        {
+                            "is-kinematic": true
+                        },
+                        {
+                            "is-position_servo": true,
+                            "joint_stiffness": [
+                                8000.0,
+                                8000.0,
+                                5000.0,
+                                1000.0,
+                                1000.0,
+                                1000.0
+                            ],
+                            "joint_damping_gains": [
+                                300.0,
+                                300.0,
+                                150.0,
+                                30.0,
+                                30.0,
+                                30.0
+                            ],
+                            "gravity_compensation": true,
+                            "clamp_torques_to_effort_limits": true
+                        },
+                        {
+                            "is-velocity_servo": true,
+                            "joint_damping_gains": [
+                                500.0,
+                                500.0,
+                                250.0,
+                                50.0,
+                                50.0,
+                                50.0
+                            ],
+                            "gravity_compensation": true,
+                            "clamp_torques_to_effort_limits": true
+                        }
                     ]
                 },
                 "base_link": {
@@ -464,69 +612,6 @@
                     }
                 }
             },
-            "oneOf": [
-                {
-                    "properties": {
-                        "control_mode": {
-                            "const": "kinematic"
-                        }
-                    },
-                    "not": {
-                        "anyOf": [
-                            {
-                                "required": [
-                                    "joint_stiffness"
-                                ]
-                            },
-                            {
-                                "required": [
-                                    "joint_damping_gains"
-                                ]
-                            },
-                            {
-                                "required": [
-                                    "gravity_compensation"
-                                ]
-                            },
-                            {
-                                "required": [
-                                    "clamp_torques_to_effort_limits"
-                                ]
-                            }
-                        ]
-                    }
-                },
-                {
-                    "properties": {
-                        "control_mode": {
-                            "const": "position_servo"
-                        }
-                    },
-                    "required": [
-                        "joint_stiffness",
-                        "joint_damping_gains",
-                        "gravity_compensation",
-                        "clamp_torques_to_effort_limits"
-                    ]
-                },
-                {
-                    "properties": {
-                        "control_mode": {
-                            "const": "velocity_servo"
-                        }
-                    },
-                    "required": [
-                        "joint_damping_gains",
-                        "gravity_compensation",
-                        "clamp_torques_to_effort_limits"
-                    ],
-                    "not": {
-                        "required": [
-                            "joint_stiffness"
-                        ]
-                    }
-                }
-            ],
             "not": {
                 "required": [
                     "name_expr_joint_current"

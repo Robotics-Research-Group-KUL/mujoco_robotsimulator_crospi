@@ -125,17 +125,17 @@ publication (sensors and visualization) runs in a separate thread of the simulat
 
 | `control_mode`   | Robot | Behaviour |
 |------------------|-------|-----------|
-| `kinematic`      | kinematic | Joint positions = integral of the setpoints (perfect tracking). The robot is not stopped by contacts but pushes the objects of the environment, which are simulated dynamically. Joint torques are computed with inverse dynamics (`mj_inverse`). |
-| `position_servo` | dynamic (forward dynamics, `mj_step`) | A joint PD controller tracks the integrated setpoint: `tau = joint_stiffness (q_ref - q) + joint_damping_gains (qd_sp - qd)`. Behaves like the internal position controller of an industrial robot: tracking errors, contacts, torque limits. |
-| `velocity_servo` | dynamic (forward dynamics, `mj_step`) | A joint velocity controller tracks the setpoint: `tau = joint_damping_gains (qd_sp - qd)`. |
+| `is-kinematic`      | kinematic | Joint positions = integral of the setpoints (perfect tracking). The robot is not stopped by contacts but pushes the objects of the environment, which are simulated dynamically. Joint torques are computed with inverse dynamics (`mj_inverse`). |
+| `is-position_servo` | dynamic (forward dynamics, `mj_step`) | A joint PD controller tracks the integrated setpoint: `tau = joint_stiffness (q_ref - q) + joint_damping_gains (qd_sp - qd)`. Behaves like the internal position controller of an industrial robot: tracking errors, contacts, torque limits. |
+| `is-velocity_servo` | dynamic (forward dynamics, `mj_step`) | A joint velocity controller tracks the setpoint: `tau = joint_damping_gains (qd_sp - qd)`. |
 
 In the dynamic modes the controller runs at every physics step (e.g. 1 kHz), and:
 
-- `gravity_compensation: true` compensates the weight of all the robot links exactly (MuJoCo `gravcomp` with the
+- `control_mode/gravity_compensation: true` compensates the weight of all the robot links exactly (MuJoCo `gravcomp` with the
   masses of the URDF), as the internal controller of most industrial robots does. Without it, the position servo sags
   by about (gravity torque / `joint_stiffness`) and the velocity servo drifts down. Objects of the environment and
   payloads are not compensated.
-- `clamp_torques_to_effort_limits: true` limits the total motor torque (controller + gravity compensation) to the
+- `control_mode/clamp_torques_to_effort_limits: true` limits the total motor torque (controller + gravity compensation) to the
   URDF effort limits (`<limit effort>`).
 - When crospi activates a task (`on_activate`), the position reference is reset to the current joint positions to
   avoid wind-up.
@@ -200,11 +200,13 @@ documentation are available). Complete example:
     "contacts_enabled": true,
     "joint_armature": [0.5, 0.5, 0.3, 0.1, 0.1, 0.1],
     "joint_damping": [1.0, 1.0, 1.0, 0.5, 0.5, 0.5],
-    "control_mode": "position_servo",
-    "joint_stiffness": [8000.0, 8000.0, 5000.0, 1000.0, 1000.0, 1000.0],
-    "joint_damping_gains": [300.0, 300.0, 150.0, 30.0, 30.0, 30.0],
-    "gravity_compensation": true,
-    "clamp_torques_to_effort_limits": true,
+    "control_mode": {
+        "is-position_servo": true,
+        "joint_stiffness": [8000.0, 8000.0, 5000.0, 1000.0, 1000.0, 1000.0],
+        "joint_damping_gains": [300.0, 300.0, 150.0, 30.0, 30.0, 30.0],
+        "gravity_compensation": true,
+        "clamp_torques_to_effort_limits": true
+    },
     "base_link": "base_link",
     "tcp_link": "tool0",
     "name_expr_joint_vel": "joint_vel",
@@ -234,17 +236,29 @@ documentation are available). Complete example:
 | `add_ground_plane` | yes | Adds an infinite plane at z = 0. |
 | `simulation_timestep`, `integrator`, `gravity`, `contacts_enabled` | yes | MuJoCo physics options (they overwrite those of the environment MJCF). `implicitfast` is recommended. |
 | `joint_armature`, `joint_damping`, `joint_frictionloss` | no | Per-joint overrides of the URDF joint dynamics. |
-| `control_mode` | yes | `kinematic`, `position_servo` or `velocity_servo`. |
-| `joint_stiffness` | `position_servo` | Kp of the joint controller [Nm/rad]. |
-| `joint_damping_gains` | `position_servo`, `velocity_servo` | Kd of the joint controller [Nms/rad]. |
-| `gravity_compensation`, `clamp_torques_to_effort_limits` | `position_servo`, `velocity_servo` | See [Control modes](#control-modes). |
+| `control_mode` | yes | Object with exactly one mode key, `is-kinematic`, `is-position_servo` or `is-velocity_servo` (`true`), and the parameters of that mode (see below). |
+| `control_mode/joint_stiffness` | `is-position_servo` | Kp of the joint controller [Nm/rad]. |
+| `control_mode/joint_damping_gains` | `is-position_servo`, `is-velocity_servo` | Kd of the joint controller [Nms/rad]. |
+| `control_mode/gravity_compensation`, `control_mode/clamp_torques_to_effort_limits` | `is-position_servo`, `is-velocity_servo` | See [Control modes](#control-modes). |
 | `base_link`, `tcp_link` | if needed | Links used for the Cartesian/base feedback and sensors. |
 | `name_expr_*` | no | Feedback channels to eTaSL (as in `simple_kinematic_simulation`). `name_expr_joint_current` is not supported. |
 | `ros_node_name` | yes | ROS 2 node of the simulator (sensor publication and visualization). |
 | `sensor_publishing` | yes | `topic_namespace`, `publish_period` [s] and the optional list `sensors` (all available sensors if omitted). |
 | `visualization` | no | `model_topic`, `state_topic`, `publish_period` [s] for `mujoco_viewer.py`. |
 
-Parameters that do not apply to the selected `control_mode` are rejected.
+The control mode follows the crospi convention of `is-<name>` discriminators: the parameters of a mode are given in
+the `control_mode` object together with its `is-<mode>` key, and the JSON schema only offers (autocompletion) and
+requires them for that mode (`dependencies` keyed by `is-<mode>`). Parameters that do not apply to the selected mode
+are rejected, both by the schema and by the simulator:
+
+```json
+"control_mode": {"is-kinematic": true}
+
+"control_mode": {"is-velocity_servo": true,
+                 "joint_damping_gains": [500.0, 500.0, 250.0, 50.0, 50.0, 50.0],
+                 "gravity_compensation": true,
+                 "clamp_torques_to_effort_limits": true}
+```
 
 ### Selecting the published sensors
 

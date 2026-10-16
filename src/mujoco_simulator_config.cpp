@@ -18,6 +18,7 @@
 
 #include "mujoco_robotsimulator_crospi/mujoco_simulator_config.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <set>
@@ -98,12 +99,6 @@ std::vector<double> read_joint_array(const Json::Value& config, const std::strin
                          key, njoints, v.size()));
     }
     return v;
-}
-
-void forbid(const Json::Value& config, const std::string& key, const std::string& reason) {
-    if (config.isMember(key)) {
-        fail(fmt::format("parameter '{}' is not allowed {}.", key, reason));
-    }
 }
 
 } // namespace
@@ -213,29 +208,56 @@ SimulatorConfig parse_config(const Json::Value& config, std::shared_ptr<etasl::J
     }
 
     // ---------------- control ----------------
-    std::string mode = read_string(config, "control_mode");
+    // control_mode is an object with exactly one discriminator key (is-kinematic, is-position_servo, is-velocity_servo)
+    // and the parameters of that mode, e.g. {"is-position_servo": true, "joint_stiffness": [...], ...}.
+    for (const char* key : {"joint_stiffness", "joint_damping_gains", "gravity_compensation", "clamp_torques_to_effort_limits"}) {
+        if (config.isMember(key)) {
+            fail(fmt::format("parameter '{}' must be given inside the 'control_mode' object, together with the "
+                             "is-<mode> key of the mode it belongs to.", key));
+        }
+    }
+    const Json::Value cm = require(config, "control_mode");
+    if (!cm.isObject()) {
+        fail("parameter 'control_mode' must be an object with one of the keys is-kinematic, is-position_servo or "
+             "is-velocity_servo (and the parameters of that mode).");
+    }
+    std::string mode;
+    for (const auto& key : cm.getMemberNames()) {
+        if (key.rfind("is-", 0) == 0) {
+            if (!mode.empty()) {
+                fail(fmt::format("'control_mode' contains more than one mode ('is-{}' and '{}').", mode, key));
+            }
+            if (!cm[key].isBool() || !cm[key].asBool()) {
+                fail(fmt::format("'control_mode/{}' must be true.", key));
+            }
+            mode = key.substr(3);
+        }
+    }
+    std::vector<std::string> allowed;
     if (mode == "kinematic") {
         c.control_mode = ControlMode::KINEMATIC;
-        const std::string reason = "when control_mode is 'kinematic' (it only applies to the dynamic control modes)";
-        forbid(config, "joint_stiffness", reason);
-        forbid(config, "joint_damping_gains", reason);
-        forbid(config, "gravity_compensation", reason);
-        forbid(config, "clamp_torques_to_effort_limits", reason);
         c.gravity_compensation = false;
         c.clamp_torques_to_effort_limits = false;
     } else if (mode == "position_servo" || mode == "velocity_servo") {
         if (mode == "position_servo") {
             c.control_mode = ControlMode::POSITION_SERVO;
-            c.joint_stiffness = read_joint_array(config, "joint_stiffness", n);
+            c.joint_stiffness = read_joint_array(cm, "joint_stiffness", n);
+            allowed.push_back("joint_stiffness");
         } else {
             c.control_mode = ControlMode::VELOCITY_SERVO;
-            forbid(config, "joint_stiffness", "when control_mode is 'velocity_servo'");
         }
-        c.joint_damping_gains = read_joint_array(config, "joint_damping_gains", n);
-        c.gravity_compensation = read_bool(config, "gravity_compensation");
-        c.clamp_torques_to_effort_limits = read_bool(config, "clamp_torques_to_effort_limits");
+        c.joint_damping_gains = read_joint_array(cm, "joint_damping_gains", n);
+        c.gravity_compensation = read_bool(cm, "gravity_compensation");
+        c.clamp_torques_to_effort_limits = read_bool(cm, "clamp_torques_to_effort_limits");
+        allowed.insert(allowed.end(), {"joint_damping_gains", "gravity_compensation", "clamp_torques_to_effort_limits"});
     } else {
-        fail(fmt::format("parameter 'control_mode' must be one of kinematic, position_servo, velocity_servo (got '{}').", mode));
+        fail(fmt::format("'control_mode' must contain one of the keys is-kinematic, is-position_servo or is-velocity_servo{}.",
+                         mode.empty() ? "" : fmt::format(" (got 'is-{}')", mode)));
+    }
+    for (const auto& key : cm.getMemberNames()) {
+        if (key != "is-" + mode && std::find(allowed.begin(), allowed.end(), key) == allowed.end()) {
+            fail(fmt::format("parameter 'control_mode/{}' does not apply to the mode '{}'.", key, mode));
+        }
     }
 
     // ---------------- feedback ----------------
