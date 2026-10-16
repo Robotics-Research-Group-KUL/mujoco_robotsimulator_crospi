@@ -24,7 +24,7 @@
                 {
                     "is-mujoco_robotsimulator_crospi": true,
                     "robot_joints": ["shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint", "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"],
-                    "initial_joints": [0.0, -1.5708, 1.5708, -1.5708, -1.5708, 0.0],
+                    "initial_joints": [-1.57, -1.5708, 1.5708, -1.5708, -1.5708, 0.0],
                     "periodicity": 0.01,
                     "urdf_path": "$[mujoco_robotsimulator_crospi]/config/urdf/ur10e_cylinder_tool.urdf",
                     "environment_mjcf_path": "$[mujoco_robotsimulator_crospi]/config/environments/pick_and_place/table_with_box.xml",
