@@ -1,0 +1,286 @@
+<!--
+  Environment for peg-in-hole insertion, for mujoco_robotsimulator_crospi.
+
+  The peg is the cylindrical contact tool of the robot (urdf/ur10e_cylinder_tool.urdf: diameter 30 mm, 15 cm long,
+  fixed to tool0). A steel block on the table has a cylindrical hole with a DIAMETRAL clearance of 1 mm:
+      hole diameter = 30 mm + 1 mm = 31.0 mm   (radial clearance 0.5 mm per side)
+      hole depth    = 50 mm, flat bottom, no chamfer
+  World coordinates (with the identity base pose of the simulator configuration, world = robot base_link):
+      hole axis: vertical, through (0.174, -0.615)
+      hole entrance (block top surface): z = 0.210
+      hole bottom: z = 0.160
+      block: 10 x 10 x 6 cm on the table top (z = 0.15)
+
+  At the joints [4.7116, -1.5708, 2.0944, -2.0944, -1.5708, 0] (MoveHome) the peg is vertical and its tip is at
+  (0.174, -0.615, 0.241): on the axis of the hole, 31 mm above the entrance. Full insertion (tip on the
+  bottom) corresponds to tool0 at z = 0.310.
+
+  The hole wall is made of 180 box segments (MuJoCo replaces concave meshes by their convex hull, so a single mesh with
+  a hole cannot be used). Their inner faces form a regular 180-gon with apothem 15.50 mm: the deviation from the
+  circle is at most 0.0024 mm, much smaller than the clearance.
+  This file was generated with generate_peg_in_hole_environments.py (in the same directory).
+
+  Sensors (published by the simulator on <topic_namespace>/mujoco_sensors/<name>):
+    - block_top_touch:   normal contact force [N] on the top surface of the block (e.g. peg landing next to the hole)
+    - hole_wall_touch:   normal contact force [N] on the wall of the hole
+    - hole_bottom_touch: normal contact force [N] on the bottom of the hole
+    - hole_entrance, hole_bottom: ground-truth positions of the center of the hole at the entrance and at the bottom [m]
+
+  The physics options (timestep, gravity, integrator, contacts) are set by the simulator configuration; use
+  simulation_timestep <= 0.001 s (see the contact parameters below).
+-->
+<mujoco model="table_with_hole_1mm_clearance">
+  <compiler angle="radian"/>
+
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.6 0.6 0.6"/>
+  </visual>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.2 0.3 0.4" rgb2="0.3 0.4 0.5" width="512" height="512"/>
+    <material name="grid" texture="grid" texrepeat="4 4" reflectance="0.1"/>
+    <material name="wood" rgba="0.55 0.4 0.3 1"/>
+    <material name="steel" rgba="0.6 0.62 0.65 1" specular="0.6" shininess="0.6"/>
+  </asset>
+
+  <default>
+    <!-- Rigid, static contact surfaces for tight-tolerance insertion:
+         - priority 1: these contact parameters are used (instead of mixing them with those of the peg);
+         - solref timeconst 0.002 s, critically damped, and solimp 0.95-0.99: very stiff contact, penetration of
+           a few micrometres at tens of N, i.e. much smaller than the radial clearance (>= 0.05 mm).
+           REQUIRES simulation_timestep <= 0.001 s (MuJoCo limits the time constant to >= 2 x timestep).
+           The high stiffness is needed at the sharp edge of the hole: with a softer contact, the peg sinks into the
+           rim during landing deeper than the width of the thin overlaps at the edge, and MuJoCo resolves these
+           overlaps sideways, which artificially pushes a peg resting on the rim into the hole;
+         - friction: 0.3 (dry steel on steel/aluminium), small torsional and rolling friction;
+         - condim 3: normal force + 2D tangential friction. -->
+    <default class="rigid_surface">
+      <geom priority="1" condim="3" friction="0.3 0.005 0.0001" solref="0.002 1" solimp="0.95 0.99 0.001 0.5 2"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <light name="top" pos="0 0 3" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="0 0 0.05" material="grid"/>
+
+    <!-- Table: 0.8 x 0.7 m, top surface at z = 0.15 m -->
+    <body name="table" pos="0.174 -0.65 0.075">
+      <geom name="table_top" class="rigid_surface" type="box" size="0.4 0.35 0.075" material="wood"/>
+    </body>
+
+    <!-- Block with the hole. Body frame: origin at the hole axis on the table top (0.174, -0.615, 0.15). -->
+    <body name="hole_block" pos="0.174 -0.615 0.15">
+      <!-- floor of the block (bottom of the hole at z = 0.01 in this frame). Separate (fixed) body, so that the
+           touch sensor of the bottom does not count the contacts on the wall/top and vice versa. -->
+      <body name="hole_floor">
+        <geom name="block_floor" class="rigid_surface" type="box" pos="0 0 0.005" size="0.05 0.05 0.005" material="steel"/>
+        <site name="hole_bottom_volume" type="cylinder" pos="0 0 0.01" size="0.01550 0.001" group="4" rgba="0 1 0 0.2"/>
+      </body>
+      <!-- outer square frame of the block -->
+      <geom name="block_side_px" class="rigid_surface" type="box" pos="0.045000000000000005 0 0.035" size="0.005 0.05 0.025" material="steel"/>
+      <geom name="block_side_nx" class="rigid_surface" type="box" pos="-0.045000000000000005 0 0.035" size="0.005 0.05 0.025" material="steel"/>
+      <geom name="block_side_py" class="rigid_surface" type="box" pos="0 0.045000000000000005 0.035" size="0.05 0.005 0.025" material="steel"/>
+      <geom name="block_side_ny" class="rigid_surface" type="box" pos="0 -0.045000000000000005 0.035" size="0.05 0.005 0.025" material="steel"/>
+      <!-- wall of the hole: 180 segments, inner apothem 15.50 mm -->
+        <geom name="wall_000" class="rigid_surface" type="box" pos="0.0441053 0.0000000 0.035" euler="0 0 0.0000000" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_001" class="rigid_surface" type="box" pos="0.0440785 0.0015393 0.035" euler="0 0 0.0349066" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_002" class="rigid_surface" type="box" pos="0.0439979 0.0030766 0.035" euler="0 0 0.0698132" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_003" class="rigid_surface" type="box" pos="0.0438637 0.0046103 0.035" euler="0 0 0.1047198" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_004" class="rigid_surface" type="box" pos="0.0436761 0.0061383 0.035" euler="0 0 0.1396263" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_005" class="rigid_surface" type="box" pos="0.0434353 0.0076588 0.035" euler="0 0 0.1745329" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_006" class="rigid_surface" type="box" pos="0.0431415 0.0091700 0.035" euler="0 0 0.2094395" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_007" class="rigid_surface" type="box" pos="0.0427952 0.0106700 0.035" euler="0 0 0.2443461" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_008" class="rigid_surface" type="box" pos="0.0423968 0.0121571 0.035" euler="0 0 0.2792527" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_009" class="rigid_surface" type="box" pos="0.0419467 0.0136293 0.035" euler="0 0 0.3141593" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_010" class="rigid_surface" type="box" pos="0.0414455 0.0150849 0.035" euler="0 0 0.3490659" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_011" class="rigid_surface" type="box" pos="0.0408938 0.0165222 0.035" euler="0 0 0.3839724" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_012" class="rigid_surface" type="box" pos="0.0402922 0.0179393 0.035" euler="0 0 0.4188790" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_013" class="rigid_surface" type="box" pos="0.0396416 0.0193345 0.035" euler="0 0 0.4537856" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_014" class="rigid_surface" type="box" pos="0.0389427 0.0207062 0.035" euler="0 0 0.4886922" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_015" class="rigid_surface" type="box" pos="0.0381963 0.0220527 0.035" euler="0 0 0.5235988" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_016" class="rigid_surface" type="box" pos="0.0374034 0.0233723 0.035" euler="0 0 0.5585054" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_017" class="rigid_surface" type="box" pos="0.0365650 0.0246634 0.035" euler="0 0 0.5934119" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_018" class="rigid_surface" type="box" pos="0.0356820 0.0259245 0.035" euler="0 0 0.6283185" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_019" class="rigid_surface" type="box" pos="0.0347555 0.0271540 0.035" euler="0 0 0.6632251" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_020" class="rigid_surface" type="box" pos="0.0337866 0.0283504 0.035" euler="0 0 0.6981317" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_021" class="rigid_surface" type="box" pos="0.0327767 0.0295122 0.035" euler="0 0 0.7330383" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_022" class="rigid_surface" type="box" pos="0.0317267 0.0306381 0.035" euler="0 0 0.7679449" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_023" class="rigid_surface" type="box" pos="0.0306381 0.0317267 0.035" euler="0 0 0.8028515" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_024" class="rigid_surface" type="box" pos="0.0295122 0.0327767 0.035" euler="0 0 0.8377580" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_025" class="rigid_surface" type="box" pos="0.0283504 0.0337866 0.035" euler="0 0 0.8726646" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_026" class="rigid_surface" type="box" pos="0.0271540 0.0347555 0.035" euler="0 0 0.9075712" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_027" class="rigid_surface" type="box" pos="0.0259245 0.0356820 0.035" euler="0 0 0.9424778" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_028" class="rigid_surface" type="box" pos="0.0246634 0.0365650 0.035" euler="0 0 0.9773844" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_029" class="rigid_surface" type="box" pos="0.0233723 0.0374034 0.035" euler="0 0 1.0122910" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_030" class="rigid_surface" type="box" pos="0.0220527 0.0381963 0.035" euler="0 0 1.0471976" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_031" class="rigid_surface" type="box" pos="0.0207062 0.0389427 0.035" euler="0 0 1.0821041" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_032" class="rigid_surface" type="box" pos="0.0193345 0.0396416 0.035" euler="0 0 1.1170107" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_033" class="rigid_surface" type="box" pos="0.0179393 0.0402922 0.035" euler="0 0 1.1519173" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_034" class="rigid_surface" type="box" pos="0.0165222 0.0408938 0.035" euler="0 0 1.1868239" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_035" class="rigid_surface" type="box" pos="0.0150849 0.0414455 0.035" euler="0 0 1.2217305" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_036" class="rigid_surface" type="box" pos="0.0136293 0.0419467 0.035" euler="0 0 1.2566371" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_037" class="rigid_surface" type="box" pos="0.0121571 0.0423968 0.035" euler="0 0 1.2915436" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_038" class="rigid_surface" type="box" pos="0.0106700 0.0427952 0.035" euler="0 0 1.3264502" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_039" class="rigid_surface" type="box" pos="0.0091700 0.0431415 0.035" euler="0 0 1.3613568" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_040" class="rigid_surface" type="box" pos="0.0076588 0.0434353 0.035" euler="0 0 1.3962634" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_041" class="rigid_surface" type="box" pos="0.0061383 0.0436761 0.035" euler="0 0 1.4311700" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_042" class="rigid_surface" type="box" pos="0.0046103 0.0438637 0.035" euler="0 0 1.4660766" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_043" class="rigid_surface" type="box" pos="0.0030766 0.0439979 0.035" euler="0 0 1.5009832" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_044" class="rigid_surface" type="box" pos="0.0015393 0.0440785 0.035" euler="0 0 1.5358897" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_045" class="rigid_surface" type="box" pos="0.0000000 0.0441053 0.035" euler="0 0 1.5707963" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_046" class="rigid_surface" type="box" pos="-0.0015393 0.0440785 0.035" euler="0 0 1.6057029" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_047" class="rigid_surface" type="box" pos="-0.0030766 0.0439979 0.035" euler="0 0 1.6406095" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_048" class="rigid_surface" type="box" pos="-0.0046103 0.0438637 0.035" euler="0 0 1.6755161" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_049" class="rigid_surface" type="box" pos="-0.0061383 0.0436761 0.035" euler="0 0 1.7104227" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_050" class="rigid_surface" type="box" pos="-0.0076588 0.0434353 0.035" euler="0 0 1.7453293" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_051" class="rigid_surface" type="box" pos="-0.0091700 0.0431415 0.035" euler="0 0 1.7802358" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_052" class="rigid_surface" type="box" pos="-0.0106700 0.0427952 0.035" euler="0 0 1.8151424" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_053" class="rigid_surface" type="box" pos="-0.0121571 0.0423968 0.035" euler="0 0 1.8500490" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_054" class="rigid_surface" type="box" pos="-0.0136293 0.0419467 0.035" euler="0 0 1.8849556" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_055" class="rigid_surface" type="box" pos="-0.0150849 0.0414455 0.035" euler="0 0 1.9198622" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_056" class="rigid_surface" type="box" pos="-0.0165222 0.0408938 0.035" euler="0 0 1.9547688" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_057" class="rigid_surface" type="box" pos="-0.0179393 0.0402922 0.035" euler="0 0 1.9896753" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_058" class="rigid_surface" type="box" pos="-0.0193345 0.0396416 0.035" euler="0 0 2.0245819" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_059" class="rigid_surface" type="box" pos="-0.0207062 0.0389427 0.035" euler="0 0 2.0594885" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_060" class="rigid_surface" type="box" pos="-0.0220527 0.0381963 0.035" euler="0 0 2.0943951" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_061" class="rigid_surface" type="box" pos="-0.0233723 0.0374034 0.035" euler="0 0 2.1293017" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_062" class="rigid_surface" type="box" pos="-0.0246634 0.0365650 0.035" euler="0 0 2.1642083" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_063" class="rigid_surface" type="box" pos="-0.0259245 0.0356820 0.035" euler="0 0 2.1991149" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_064" class="rigid_surface" type="box" pos="-0.0271540 0.0347555 0.035" euler="0 0 2.2340214" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_065" class="rigid_surface" type="box" pos="-0.0283504 0.0337866 0.035" euler="0 0 2.2689280" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_066" class="rigid_surface" type="box" pos="-0.0295122 0.0327767 0.035" euler="0 0 2.3038346" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_067" class="rigid_surface" type="box" pos="-0.0306381 0.0317267 0.035" euler="0 0 2.3387412" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_068" class="rigid_surface" type="box" pos="-0.0317267 0.0306381 0.035" euler="0 0 2.3736478" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_069" class="rigid_surface" type="box" pos="-0.0327767 0.0295122 0.035" euler="0 0 2.4085544" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_070" class="rigid_surface" type="box" pos="-0.0337866 0.0283504 0.035" euler="0 0 2.4434610" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_071" class="rigid_surface" type="box" pos="-0.0347555 0.0271540 0.035" euler="0 0 2.4783675" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_072" class="rigid_surface" type="box" pos="-0.0356820 0.0259245 0.035" euler="0 0 2.5132741" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_073" class="rigid_surface" type="box" pos="-0.0365650 0.0246634 0.035" euler="0 0 2.5481807" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_074" class="rigid_surface" type="box" pos="-0.0374034 0.0233723 0.035" euler="0 0 2.5830873" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_075" class="rigid_surface" type="box" pos="-0.0381963 0.0220527 0.035" euler="0 0 2.6179939" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_076" class="rigid_surface" type="box" pos="-0.0389427 0.0207062 0.035" euler="0 0 2.6529005" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_077" class="rigid_surface" type="box" pos="-0.0396416 0.0193345 0.035" euler="0 0 2.6878070" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_078" class="rigid_surface" type="box" pos="-0.0402922 0.0179393 0.035" euler="0 0 2.7227136" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_079" class="rigid_surface" type="box" pos="-0.0408938 0.0165222 0.035" euler="0 0 2.7576202" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_080" class="rigid_surface" type="box" pos="-0.0414455 0.0150849 0.035" euler="0 0 2.7925268" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_081" class="rigid_surface" type="box" pos="-0.0419467 0.0136293 0.035" euler="0 0 2.8274334" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_082" class="rigid_surface" type="box" pos="-0.0423968 0.0121571 0.035" euler="0 0 2.8623400" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_083" class="rigid_surface" type="box" pos="-0.0427952 0.0106700 0.035" euler="0 0 2.8972466" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_084" class="rigid_surface" type="box" pos="-0.0431415 0.0091700 0.035" euler="0 0 2.9321531" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_085" class="rigid_surface" type="box" pos="-0.0434353 0.0076588 0.035" euler="0 0 2.9670597" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_086" class="rigid_surface" type="box" pos="-0.0436761 0.0061383 0.035" euler="0 0 3.0019663" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_087" class="rigid_surface" type="box" pos="-0.0438637 0.0046103 0.035" euler="0 0 3.0368729" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_088" class="rigid_surface" type="box" pos="-0.0439979 0.0030766 0.035" euler="0 0 3.0717795" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_089" class="rigid_surface" type="box" pos="-0.0440785 0.0015393 0.035" euler="0 0 3.1066861" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_090" class="rigid_surface" type="box" pos="-0.0441053 0.0000000 0.035" euler="0 0 3.1415927" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_091" class="rigid_surface" type="box" pos="-0.0440785 -0.0015393 0.035" euler="0 0 3.1764992" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_092" class="rigid_surface" type="box" pos="-0.0439979 -0.0030766 0.035" euler="0 0 3.2114058" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_093" class="rigid_surface" type="box" pos="-0.0438637 -0.0046103 0.035" euler="0 0 3.2463124" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_094" class="rigid_surface" type="box" pos="-0.0436761 -0.0061383 0.035" euler="0 0 3.2812190" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_095" class="rigid_surface" type="box" pos="-0.0434353 -0.0076588 0.035" euler="0 0 3.3161256" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_096" class="rigid_surface" type="box" pos="-0.0431415 -0.0091700 0.035" euler="0 0 3.3510322" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_097" class="rigid_surface" type="box" pos="-0.0427952 -0.0106700 0.035" euler="0 0 3.3859387" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_098" class="rigid_surface" type="box" pos="-0.0423968 -0.0121571 0.035" euler="0 0 3.4208453" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_099" class="rigid_surface" type="box" pos="-0.0419467 -0.0136293 0.035" euler="0 0 3.4557519" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_100" class="rigid_surface" type="box" pos="-0.0414455 -0.0150849 0.035" euler="0 0 3.4906585" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_101" class="rigid_surface" type="box" pos="-0.0408938 -0.0165222 0.035" euler="0 0 3.5255651" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_102" class="rigid_surface" type="box" pos="-0.0402922 -0.0179393 0.035" euler="0 0 3.5604717" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_103" class="rigid_surface" type="box" pos="-0.0396416 -0.0193345 0.035" euler="0 0 3.5953783" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_104" class="rigid_surface" type="box" pos="-0.0389427 -0.0207062 0.035" euler="0 0 3.6302848" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_105" class="rigid_surface" type="box" pos="-0.0381963 -0.0220527 0.035" euler="0 0 3.6651914" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_106" class="rigid_surface" type="box" pos="-0.0374034 -0.0233723 0.035" euler="0 0 3.7000980" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_107" class="rigid_surface" type="box" pos="-0.0365650 -0.0246634 0.035" euler="0 0 3.7350046" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_108" class="rigid_surface" type="box" pos="-0.0356820 -0.0259245 0.035" euler="0 0 3.7699112" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_109" class="rigid_surface" type="box" pos="-0.0347555 -0.0271540 0.035" euler="0 0 3.8048178" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_110" class="rigid_surface" type="box" pos="-0.0337866 -0.0283504 0.035" euler="0 0 3.8397244" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_111" class="rigid_surface" type="box" pos="-0.0327767 -0.0295122 0.035" euler="0 0 3.8746309" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_112" class="rigid_surface" type="box" pos="-0.0317267 -0.0306381 0.035" euler="0 0 3.9095375" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_113" class="rigid_surface" type="box" pos="-0.0306381 -0.0317267 0.035" euler="0 0 3.9444441" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_114" class="rigid_surface" type="box" pos="-0.0295122 -0.0327767 0.035" euler="0 0 3.9793507" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_115" class="rigid_surface" type="box" pos="-0.0283504 -0.0337866 0.035" euler="0 0 4.0142573" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_116" class="rigid_surface" type="box" pos="-0.0271540 -0.0347555 0.035" euler="0 0 4.0491639" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_117" class="rigid_surface" type="box" pos="-0.0259245 -0.0356820 0.035" euler="0 0 4.0840704" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_118" class="rigid_surface" type="box" pos="-0.0246634 -0.0365650 0.035" euler="0 0 4.1189770" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_119" class="rigid_surface" type="box" pos="-0.0233723 -0.0374034 0.035" euler="0 0 4.1538836" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_120" class="rigid_surface" type="box" pos="-0.0220527 -0.0381963 0.035" euler="0 0 4.1887902" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_121" class="rigid_surface" type="box" pos="-0.0207062 -0.0389427 0.035" euler="0 0 4.2236968" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_122" class="rigid_surface" type="box" pos="-0.0193345 -0.0396416 0.035" euler="0 0 4.2586034" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_123" class="rigid_surface" type="box" pos="-0.0179393 -0.0402922 0.035" euler="0 0 4.2935100" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_124" class="rigid_surface" type="box" pos="-0.0165222 -0.0408938 0.035" euler="0 0 4.3284165" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_125" class="rigid_surface" type="box" pos="-0.0150849 -0.0414455 0.035" euler="0 0 4.3633231" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_126" class="rigid_surface" type="box" pos="-0.0136293 -0.0419467 0.035" euler="0 0 4.3982297" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_127" class="rigid_surface" type="box" pos="-0.0121571 -0.0423968 0.035" euler="0 0 4.4331363" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_128" class="rigid_surface" type="box" pos="-0.0106700 -0.0427952 0.035" euler="0 0 4.4680429" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_129" class="rigid_surface" type="box" pos="-0.0091700 -0.0431415 0.035" euler="0 0 4.5029495" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_130" class="rigid_surface" type="box" pos="-0.0076588 -0.0434353 0.035" euler="0 0 4.5378561" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_131" class="rigid_surface" type="box" pos="-0.0061383 -0.0436761 0.035" euler="0 0 4.5727626" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_132" class="rigid_surface" type="box" pos="-0.0046103 -0.0438637 0.035" euler="0 0 4.6076692" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_133" class="rigid_surface" type="box" pos="-0.0030766 -0.0439979 0.035" euler="0 0 4.6425758" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_134" class="rigid_surface" type="box" pos="-0.0015393 -0.0440785 0.035" euler="0 0 4.6774824" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_135" class="rigid_surface" type="box" pos="-0.0000000 -0.0441053 0.035" euler="0 0 4.7123890" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_136" class="rigid_surface" type="box" pos="0.0015393 -0.0440785 0.035" euler="0 0 4.7472956" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_137" class="rigid_surface" type="box" pos="0.0030766 -0.0439979 0.035" euler="0 0 4.7822022" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_138" class="rigid_surface" type="box" pos="0.0046103 -0.0438637 0.035" euler="0 0 4.8171087" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_139" class="rigid_surface" type="box" pos="0.0061383 -0.0436761 0.035" euler="0 0 4.8520153" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_140" class="rigid_surface" type="box" pos="0.0076588 -0.0434353 0.035" euler="0 0 4.8869219" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_141" class="rigid_surface" type="box" pos="0.0091700 -0.0431415 0.035" euler="0 0 4.9218285" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_142" class="rigid_surface" type="box" pos="0.0106700 -0.0427952 0.035" euler="0 0 4.9567351" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_143" class="rigid_surface" type="box" pos="0.0121571 -0.0423968 0.035" euler="0 0 4.9916417" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_144" class="rigid_surface" type="box" pos="0.0136293 -0.0419467 0.035" euler="0 0 5.0265482" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_145" class="rigid_surface" type="box" pos="0.0150849 -0.0414455 0.035" euler="0 0 5.0614548" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_146" class="rigid_surface" type="box" pos="0.0165222 -0.0408938 0.035" euler="0 0 5.0963614" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_147" class="rigid_surface" type="box" pos="0.0179393 -0.0402922 0.035" euler="0 0 5.1312680" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_148" class="rigid_surface" type="box" pos="0.0193345 -0.0396416 0.035" euler="0 0 5.1661746" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_149" class="rigid_surface" type="box" pos="0.0207062 -0.0389427 0.035" euler="0 0 5.2010812" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_150" class="rigid_surface" type="box" pos="0.0220527 -0.0381963 0.035" euler="0 0 5.2359878" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_151" class="rigid_surface" type="box" pos="0.0233723 -0.0374034 0.035" euler="0 0 5.2708943" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_152" class="rigid_surface" type="box" pos="0.0246634 -0.0365650 0.035" euler="0 0 5.3058009" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_153" class="rigid_surface" type="box" pos="0.0259245 -0.0356820 0.035" euler="0 0 5.3407075" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_154" class="rigid_surface" type="box" pos="0.0271540 -0.0347555 0.035" euler="0 0 5.3756141" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_155" class="rigid_surface" type="box" pos="0.0283504 -0.0337866 0.035" euler="0 0 5.4105207" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_156" class="rigid_surface" type="box" pos="0.0295122 -0.0327767 0.035" euler="0 0 5.4454273" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_157" class="rigid_surface" type="box" pos="0.0306381 -0.0317267 0.035" euler="0 0 5.4803339" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_158" class="rigid_surface" type="box" pos="0.0317267 -0.0306381 0.035" euler="0 0 5.5152404" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_159" class="rigid_surface" type="box" pos="0.0327767 -0.0295122 0.035" euler="0 0 5.5501470" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_160" class="rigid_surface" type="box" pos="0.0337866 -0.0283504 0.035" euler="0 0 5.5850536" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_161" class="rigid_surface" type="box" pos="0.0347555 -0.0271540 0.035" euler="0 0 5.6199602" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_162" class="rigid_surface" type="box" pos="0.0356820 -0.0259245 0.035" euler="0 0 5.6548668" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_163" class="rigid_surface" type="box" pos="0.0365650 -0.0246634 0.035" euler="0 0 5.6897734" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_164" class="rigid_surface" type="box" pos="0.0374034 -0.0233723 0.035" euler="0 0 5.7246799" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_165" class="rigid_surface" type="box" pos="0.0381963 -0.0220527 0.035" euler="0 0 5.7595865" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_166" class="rigid_surface" type="box" pos="0.0389427 -0.0207062 0.035" euler="0 0 5.7944931" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_167" class="rigid_surface" type="box" pos="0.0396416 -0.0193345 0.035" euler="0 0 5.8293997" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_168" class="rigid_surface" type="box" pos="0.0402922 -0.0179393 0.035" euler="0 0 5.8643063" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_169" class="rigid_surface" type="box" pos="0.0408938 -0.0165222 0.035" euler="0 0 5.8992129" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_170" class="rigid_surface" type="box" pos="0.0414455 -0.0150849 0.035" euler="0 0 5.9341195" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_171" class="rigid_surface" type="box" pos="0.0419467 -0.0136293 0.035" euler="0 0 5.9690260" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_172" class="rigid_surface" type="box" pos="0.0423968 -0.0121571 0.035" euler="0 0 6.0039326" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_173" class="rigid_surface" type="box" pos="0.0427952 -0.0106700 0.035" euler="0 0 6.0388392" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_174" class="rigid_surface" type="box" pos="0.0431415 -0.0091700 0.035" euler="0 0 6.0737458" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_175" class="rigid_surface" type="box" pos="0.0434353 -0.0076588 0.035" euler="0 0 6.1086524" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_176" class="rigid_surface" type="box" pos="0.0436761 -0.0061383 0.035" euler="0 0 6.1435590" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_177" class="rigid_surface" type="box" pos="0.0438637 -0.0046103 0.035" euler="0 0 6.1784656" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_178" class="rigid_surface" type="box" pos="0.0439979 -0.0030766 0.035" euler="0 0 6.2133721" size="0.0286053 0.0012692 0.025" material="steel"/>
+        <geom name="wall_179" class="rigid_surface" type="box" pos="0.0440785 -0.0015393 0.035" euler="0 0 6.2482787" size="0.0286053 0.0012692 0.025" material="steel"/>
+      <!-- Touch volumes (invisible, non-colliding). A MuJoCo touch sensor counts a contact of its body when the ray
+           from the contact point along the contact normal crosses the site:
+           - top: thin box just ABOVE the top surface, only reached by the vertical normals of contacts on the top;
+           - wall: thin cylinder ON THE AXIS of the hole, spanning the height of the wall: only reached by the
+             horizontal (radial) normals of contacts on the wall, not by the vertical normals of contacts on the rim. -->
+      <site name="block_top_surface" type="box" pos="0 0 0.061500000000000006" size="0.05 0.05 0.001" group="4" rgba="0 1 0 0.2"/>
+      <site name="hole_wall_volume" type="cylinder" pos="0 0 0.03515" size="0.005 0.02515" group="4" rgba="0 1 0 0.2"/>
+      <!-- Ground truth -->
+      <site name="hole_entrance" type="sphere" pos="0 0 0.060000000000000005" size="0.002" rgba="1 0.1 0.1 1"/>
+      <site name="hole_bottom" type="sphere" pos="0 0 0.01" size="0.002" rgba="1 0.1 0.1 1"/>
+    </body>
+  </worldbody>
+
+  <!-- MuJoCo sensors: published by the simulator on <topic_namespace>/mujoco_sensors/<name> -->
+  <sensor>
+    <touch name="block_top_touch" site="block_top_surface"/>
+    <touch name="hole_wall_touch" site="hole_wall_volume"/>
+    <touch name="hole_bottom_touch" site="hole_bottom_volume"/>
+    <framepos name="hole_entrance" objtype="site" objname="hole_entrance"/>
+    <framepos name="hole_bottom" objtype="site" objname="hole_bottom"/>
+  </sensor>
+</mujoco>

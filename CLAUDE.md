@@ -102,3 +102,17 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_
   (15 cm x Ø3 cm, after `tool0`) and `tool_tip`; `table_with_corner.xml` is dimensioned for this tool at `MoveHome`.
 - `config/urdf/ur10e.urdf` was generated with xacro (not installed system-wide) from `ur_description`
   (`ur_type:=ur10e name:=ur10e`); `ur_description` must be built in this workspace for the meshes.
+
+## Environment modelling (config/environments)
+
+- Concave shapes (holes, rings, sine walls) must be built from convex pieces (boxes or convex mesh prisms): MuJoCo
+  replaces a concave mesh by its convex hull.
+- MuJoCo `touch` sensors count a contact of the site's body when the RAY from the contact point along the contact
+  normal crosses the site (not "contact point inside the site"). Separate surfaces by body (e.g. `hole_floor`) or by
+  normal direction (e.g. thin cylinder on the hole axis for the wall, thin box just above the top surface).
+- Sharp edges + soft contact: a peg landing on the rim of a hole was pushed sideways into the hole (overlap slivers
+  at the edge are resolved horizontally). Peg-in-hole files use `solref 0.002` (needs timestep <= 1 ms) and the
+  validation uses a guarded approach (2 cm/s); fast impacts can still show the artefact.
+- Contour following: very stiff contacts (`solref 0.005`) chatter while sliding; contour files use `solref 0.02`.
+- Validation scripts used so far (probe bodies on slide joints, IK reachability along the path) live in the session
+  scratchpad, not in the repo; recreate them when changing the environments.

@@ -27,7 +27,7 @@
                     "initial_joints": [0.0, -1.5708, 1.5708, -1.5708, -1.5708, 0.0],
                     "periodicity": 0.01,
                     "urdf_path": "$[mujoco_robotsimulator_crospi]/config/urdf/ur10e_cylinder_tool.urdf",
-                    "environment_mjcf_path": "$[mujoco_robotsimulator_crospi]/config/environments/table_with_circular_contour.xml",
+                    "environment_mjcf_path": "$[mujoco_robotsimulator_crospi]/config/environments/table_with_hole_0.5mm_clearance.xml",
                     "base_position": [0.0, 0.0, 0.0],
                     "base_quaternion_xyzw": [0.0, 0.0, 0.0, 1.0],
                     "add_ground_plane": false,
