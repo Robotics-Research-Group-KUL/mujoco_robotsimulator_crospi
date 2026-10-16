@@ -95,7 +95,7 @@
                     "description": "Optional. Path of a MuJoCo MJCF (.xml) file describing the environment (tables, objects, lights, etc.). The robot is attached to the world body of this scene. Same path conventions as urdf_path. The physics options of this file (timestep, gravity, integrator and contact flag) are overwritten by this configuration. If omitted, the robot is placed in an empty world.",
                     "type": "string",
                     "examples": [
-                        "$[mujoco_robotsimulator_crospi]/config/environments/table_with_box.xml"
+                        "$[mujoco_robotsimulator_crospi]/config/environments/pick_and_place/table_with_box.xml"
                     ]
                 },
                 "base_position": {

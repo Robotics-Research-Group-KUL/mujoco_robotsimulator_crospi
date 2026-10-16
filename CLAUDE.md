@@ -105,6 +105,10 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_
 
 ## Environment modelling (config/environments)
 
+- Layout: one folder per task (`pick_and_place`, `guarded_motions`, `contour_following`, `peg_insertion_cylindrical`,
+  `peg_insertion_rectangular`); the peg-insertion generators live next to their files and write into their own folder.
+  The whole `config/` directory is installed, so new folders need no CMake change.
+
 - Concave shapes (holes, rings, sine walls) must be built from convex pieces (boxes or convex mesh prisms): MuJoCo
   replaces a concave mesh by its convex hull.
 - MuJoCo `touch` sensors count a contact of the site's body when the RAY from the contact point along the contact
@@ -114,5 +118,9 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_
   at the edge are resolved horizontally). Peg-in-hole files use `solref 0.002` (needs timestep <= 1 ms) and the
   validation uses a guarded approach (2 cm/s); fast impacts can still show the artefact.
 - Contour following: very stiff contacts (`solref 0.005`) chatter while sliding; contour files use `solref 0.02`.
+- Peg-in-hole holes are placed at the EXACT peg axis and yaw at MoveHome from forward kinematics (tool0 at
+  (0.173664, -0.614962, 0.391075), yaw of its x axis = pi - 0.000789 rad); rounding to (0.174, -0.615) puts the
+  peg 0.34 mm off the axis, i.e. on the rim of the tight holes. Re-derive these constants if MoveHome or the
+  URDF changes (the generators hold them as constants).
 - Validation scripts used so far (probe bodies on slide joints, IK reachability along the path) live in the session
   scratchpad, not in the repo; recreate them when changing the environments.

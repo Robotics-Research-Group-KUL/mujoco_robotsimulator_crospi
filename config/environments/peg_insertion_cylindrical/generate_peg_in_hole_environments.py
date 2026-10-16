@@ -15,7 +15,7 @@ PEG_D = 0.030                      # diameter of the cylindrical tool (peg)
 N = 180                            # segments of the hole wall
 B = 0.05                           # half side of the square block
 DEPTH = 0.05; FLOOR = 0.01         # hole depth, thickness under the hole
-cx, cy, ztop_table = 0.174, -0.615, 0.15
+cx, cy, ztop_table = 0.173664, -0.614962, 0.15   # axis of the peg at MoveHome (forward kinematics of the UR10e)
 if len(sys.argv) < 2:
     sys.exit(__doc__)
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -46,7 +46,8 @@ for c_mm in [float(a) for a in sys.argv[1:]]:
       block: {2*B*100:.0f} x {2*B*100:.0f} x {(FLOOR+DEPTH)*100:.0f} cm on the table top (z = {ztop_table})
 
   At the joints [4.7116, -1.5708, 2.0944, -2.0944, -1.5708, 0] (MoveHome) the peg is vertical and its tip is at
-  (0.174, -0.615, 0.241): on the axis of the hole, {(0.241-zt)*1000:.0f} mm above the entrance. Full insertion (tip on the
+  ({cx}, {cy}, 0.241): exactly on the axis of the hole, {(0.241-zt)*1000:.0f} mm above the entrance, so that a straight
+  vertical motion from MoveHome inserts the peg. Full insertion (tip on the
   bottom) corresponds to tool0 at z = {zb + 0.15:.3f}.
 
   The hole wall is made of {N} box segments (MuJoCo replaces concave meshes by their convex hull, so a single mesh with
@@ -98,7 +99,7 @@ for c_mm in [float(a) for a in sys.argv[1:]]:
     <geom name="floor" type="plane" size="0 0 0.05" material="grid"/>
 
     <!-- Table: 0.8 x 0.7 m, top surface at z = {ztop_table} m -->
-    <body name="table" pos="{cx} -0.65 {ztop_table/2}">
+    <body name="table" pos="0.174 -0.65 {ztop_table/2}">
       <geom name="table_top" class="rigid_surface" type="box" size="0.4 0.35 {ztop_table/2}" material="wood"/>
     </body>
 

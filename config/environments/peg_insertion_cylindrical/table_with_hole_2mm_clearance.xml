@@ -6,13 +6,14 @@
       hole diameter = 30 mm + 2 mm = 32.0 mm   (radial clearance 1 mm per side)
       hole depth    = 50 mm, flat bottom, no chamfer
   World coordinates (with the identity base pose of the simulator configuration, world = robot base_link):
-      hole axis: vertical, through (0.174, -0.615)
+      hole axis: vertical, through (0.173664, -0.614962)
       hole entrance (block top surface): z = 0.210
       hole bottom: z = 0.160
       block: 10 x 10 x 6 cm on the table top (z = 0.15)
 
   At the joints [4.7116, -1.5708, 2.0944, -2.0944, -1.5708, 0] (MoveHome) the peg is vertical and its tip is at
-  (0.174, -0.615, 0.241): on the axis of the hole, 31 mm above the entrance. Full insertion (tip on the
+  (0.173664, -0.614962, 0.241): exactly on the axis of the hole, 31 mm above the entrance, so that a straight
+  vertical motion from MoveHome inserts the peg. Full insertion (tip on the
   bottom) corresponds to tool0 at z = 0.310.
 
   The hole wall is made of 180 box segments (MuJoCo replaces concave meshes by their convex hull, so a single mesh with
@@ -68,8 +69,8 @@
       <geom name="table_top" class="rigid_surface" type="box" size="0.4 0.35 0.075" material="wood"/>
     </body>
 
-    <!-- Block with the hole. Body frame: origin at the hole axis on the table top (0.174, -0.615, 0.15). -->
-    <body name="hole_block" pos="0.174 -0.615 0.15">
+    <!-- Block with the hole. Body frame: origin at the hole axis on the table top (0.173664, -0.614962, 0.15). -->
+    <body name="hole_block" pos="0.173664 -0.614962 0.15">
       <!-- floor of the block (bottom of the hole at z = 0.01 in this frame). Separate (fixed) body, so that the
            touch sensor of the bottom does not count the contacts on the wall/top and vice versa. -->
       <body name="hole_floor">
