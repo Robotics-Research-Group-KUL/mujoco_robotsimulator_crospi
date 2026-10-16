@@ -25,7 +25,6 @@
                 "is-move_joint_space_trap": true,
                 "file_path": "$[betfsm_demos]/tasks/betfsm_demos_lib/move_joint_space_trap.etasl.lua",
                 "parameters": {
-                    "dwell_time": 0.1,
                     "maxacc": 0.5,
                     "maxvel": 0.5,
                     "target_joints": [-1.57, -1.5708, 2.0944, -2.0944, -1.5708, 0],

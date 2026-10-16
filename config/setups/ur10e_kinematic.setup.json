@@ -64,6 +64,13 @@
                     "child_link": "tool0",
                     "parent_link": "base_link"
                 },
+                "additional_frames": [
+                    {
+                        "name": "FT_sensor_frame",
+                        "child_link": "tool0",
+                        "parent_link": "base_link"
+                    }
+                ],
                 "robot_joints": ["shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint", "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"]
             }
         },
@@ -72,6 +79,11 @@
                 {
                     "is-JointStateOutputHandler": true,
                     "topic-name": "/joint_states"
+                },
+                {
+                    "is-TopicOutputHandler" : true,
+                    "topic-name" : "/forces_etasl",
+                    "variable-names" : ["x_force", "y_force", "z_force", "x_torque", "y_torque", "z_torque"]
                 }
             ],
             "inputhandlers": []
