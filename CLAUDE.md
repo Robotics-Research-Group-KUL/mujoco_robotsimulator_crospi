@@ -125,5 +125,8 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_
   (0.173664, -0.614962, 0.391075), yaw of its x axis = pi - 0.000789 rad); rounding to (0.174, -0.615) puts the
   peg 0.34 mm off the axis, i.e. on the rim of the tight holes. Re-derive these constants if MoveHome or the
   URDF changes (the generators hold them as constants).
+- README snapshots: `docs/images/*.png`, rendered by `docs/generate_snapshots.py` (needs MUJOCO_GL=glfw here: no EGL/OSMesa).
+  Re-render after changing an environment, and look at the images: they revealed that the round wall segments of the
+  cylindrical-hole block protruded outside the square block.
 - Validation scripts used so far (probe bodies on slide joints, IK reachability along the path) live in the session
   scratchpad, not in the repo; recreate them when changing the environments.

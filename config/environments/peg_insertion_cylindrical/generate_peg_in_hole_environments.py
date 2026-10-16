@@ -22,7 +22,9 @@ OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 for c_mm in [float(a) for a in sys.argv[1:]]:
     c = c_mm/1000.0
     R = (PEG_D + c)/2               # hole radius (apothem of the polygonal wall)
-    T = B*math.sqrt(2) - R + 0.002  # wall segments reach the corners of the block
+    A = 0.03                         # half side of the square opening of the outer frame of the block
+    R_OUT = A*math.sqrt(2) + 0.0015  # outer apothem of the ring segments: covers the corners of the square opening
+    T = R_OUT - R                    # radial thickness of the ring segments (they stay inside the block: R_OUT < B)
     hl = (R + T)*math.tan(math.pi/N)
     zb = ztop_table + FLOOR          # hole bottom
     zt = zb + DEPTH                  # block top / hole entrance
@@ -111,11 +113,11 @@ for c_mm in [float(a) for a in sys.argv[1:]]:
         <geom name="block_floor" class="rigid_surface" type="box" pos="0 0 {FLOOR/2}" size="{B} {B} {FLOOR/2}" material="steel"/>
         <site name="hole_bottom_volume" type="cylinder" pos="0 0 {FLOOR}" size="{R:.5f} 0.001" group="4" rgba="0 1 0 0.2"/>
       </body>
-      <!-- outer square frame of the block -->
-      <geom name="block_side_px" class="rigid_surface" type="box" pos="{B - 0.005} 0 {FLOOR + DEPTH/2}" size="0.005 {B} {DEPTH/2}" material="steel"/>
-      <geom name="block_side_nx" class="rigid_surface" type="box" pos="{-B + 0.005} 0 {FLOOR + DEPTH/2}" size="0.005 {B} {DEPTH/2}" material="steel"/>
-      <geom name="block_side_py" class="rigid_surface" type="box" pos="0 {B - 0.005} {FLOOR + DEPTH/2}" size="{B} 0.005 {DEPTH/2}" material="steel"/>
-      <geom name="block_side_ny" class="rigid_surface" type="box" pos="0 {-B + 0.005} {FLOOR + DEPTH/2}" size="{B} 0.005 {DEPTH/2}" material="steel"/>
+      <!-- outer square frame of the block: square opening of half side {A}, filled by the ring segments below -->
+      <geom name="block_side_px" class="rigid_surface" type="box" pos="{(A + B)/2} 0 {FLOOR + DEPTH/2}" size="{(B - A)/2} {B} {DEPTH/2}" material="steel"/>
+      <geom name="block_side_nx" class="rigid_surface" type="box" pos="{-(A + B)/2} 0 {FLOOR + DEPTH/2}" size="{(B - A)/2} {B} {DEPTH/2}" material="steel"/>
+      <geom name="block_side_py" class="rigid_surface" type="box" pos="0 {(A + B)/2} {FLOOR + DEPTH/2}" size="{A} {(B - A)/2} {DEPTH/2}" material="steel"/>
+      <geom name="block_side_ny" class="rigid_surface" type="box" pos="0 {-(A + B)/2} {FLOOR + DEPTH/2}" size="{A} {(B - A)/2} {DEPTH/2}" material="steel"/>
       <!-- wall of the hole: {N} segments, inner apothem {R*1000:.2f} mm -->
 {segs}
       <!-- Touch volumes (invisible, non-colliding). A MuJoCo touch sensor counts a contact of its body when the ray

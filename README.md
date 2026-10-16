@@ -107,6 +107,56 @@ plt.xlabel('time [s]'); plt.ylabel('torque [Nm]'); plt.legend(); plt.grid(); plt
 
 ---
 
+## Environments
+
+Snapshots of the environments in `config/environments/` with the UR10e (orange: contact tool / peg), at the pose
+for which they are designed (`MoveHome`, except for pick and place). Details (dimensions, sensors, contact
+properties) are in [Example files](#example-files) and in the header comment of each XML file. The images are
+generated with [docs/generate_snapshots.py](docs/generate_snapshots.py) (`MUJOCO_GL=glfw python3 docs/generate_snapshots.py`,
+from a sourced workspace).
+
+### Pick and place: `pick_and_place/table_with_box.xml`
+
+Table with a free box (0.5 kg) on it, next to the robot.
+
+<img src="docs/images/pick_and_place_table_with_box.png" width="49%"/>
+
+### Guarded motions: `guarded_motions/table_with_corner.xml`
+
+Inside corner (two steel walls) on a table, to localize with guarded motions: down to the table, then +x, then +y.
+
+<img src="docs/images/guarded_motions_table_with_corner.png" width="49%"/> <img src="docs/images/guarded_motions_table_with_corner_closeup.png" width="49%"/>
+
+### Contour following: `contour_following/`
+
+Circular contour (`table_with_circular_contour.xml`, inner diameter 0.35 m):
+
+<img src="docs/images/contour_following_table_with_circular_contour.png" width="49%"/> <img src="docs/images/contour_following_table_with_circular_contour_closeup.png" width="49%"/>
+
+Small sine contour (`table_with_small_sine_contour.xml`, one period, amplitude 5 cm):
+
+<img src="docs/images/contour_following_table_with_small_sine_contour.png" width="49%"/> <img src="docs/images/contour_following_table_with_small_sine_contour_closeup.png" width="49%"/>
+
+Large sine contour (`table_with_large_sine_contour.xml`, two periods, amplitude 10 cm):
+
+<img src="docs/images/contour_following_table_with_large_sine_contour.png" width="49%"/> <img src="docs/images/contour_following_table_with_large_sine_contour_closeup.png" width="49%"/>
+
+### Cylindrical peg insertion: `peg_insertion_cylindrical/`
+
+Block with a round hole for the cylindrical peg (shown: `table_with_hole_1mm_clearance.xml`). The four files
+(0.1, 0.5, 1 and 2 mm clearance) look identical at this scale: they only differ in the hole diameter (30.1 to 32 mm).
+
+<img src="docs/images/peg_insertion_cylindrical_table_with_hole.png" width="49%"/> <img src="docs/images/peg_insertion_cylindrical_table_with_hole_closeup.png" width="49%"/>
+
+### Rectangular peg insertion: `peg_insertion_rectangular/`
+
+Block with a rectangular hole for the rectangular peg of `ur10e_rectangular_tool.urdf` (shown:
+`table_with_rectangular_hole_1mm_clearance.xml`). The four files only differ in the size of the hole.
+
+<img src="docs/images/peg_insertion_rectangular_table_with_rectangular_hole.png" width="49%"/> <img src="docs/images/peg_insertion_rectangular_table_with_rectangular_hole_closeup.png" width="49%"/>
+
+---
+
 ## How the simulation works
 
 Crospi calls `update()` of the simulator every `periodicity` seconds in its robot driver thread (separate from the
