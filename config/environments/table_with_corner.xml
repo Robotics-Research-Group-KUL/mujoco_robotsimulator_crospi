@@ -1,0 +1,86 @@
+<!--
+  Environment for corner localization with force-controlled (guarded) motions, for mujoco_robotsimulator_crospi.
+
+  A table with an inside corner on top of it, formed by two walls. Designed for the UR10e with the cylindrical
+  contact tool (urdf/ur10e_cylinder_tool.urdf: 15 cm long, 3 cm diameter, fixed to tool0) pointing down, e.g. at
+  joints [4.7116, -1.5708, 2.0944, -2.0944, -1.5708, 0], where tool0 is at (0.174, -0.615, 0.391) and the tool tip at
+  (0.174, -0.615, 0.241). Intended sequence:
+    1. move down (-z) until contact with the table top        (surface z = 0.15, 9 cm below the tool tip)
+    2. keep contact and move in +x until contact with wall_x  (face   x = 0.30, ~11 cm)
+    3. keep contact and move in +y until contact with wall_y  (face   y = -0.50, ~10 cm)
+  The inside corner (intersection of the three surfaces) is at (0.30, -0.50, 0.15) in the world. The walls (8 cm high)
+  are only touched by the cylinder, not by the wrist.
+
+  All coordinates are in the world frame of the simulation (the robot base is placed with base_position /
+  base_quaternion_xyzw of the simulator configuration; with the identity base pose, world = robot base_link).
+
+  Sensors (published by the simulator on <topic_namespace>/mujoco_sensors/<name>):
+    - table_touch, wall_x_touch, wall_y_touch: normal contact force [N] on each of the three surfaces
+    - corner_position: ground-truth position of the corner (framepos of the site 'corner', in the world) [m]
+
+  The physics options (timestep, gravity, integrator, contacts) are set by the simulator configuration.
+-->
+<mujoco model="table_with_corner">
+  <compiler angle="radian"/>
+
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.6 0.6 0.6"/>
+  </visual>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.2 0.3 0.4" rgb2="0.3 0.4 0.5" width="512" height="512"/>
+    <material name="grid" texture="grid" texrepeat="4 4" reflectance="0.1"/>
+    <material name="wood" rgba="0.55 0.4 0.3 1"/>
+    <material name="steel" rgba="0.6 0.62 0.65 1" specular="0.6" shininess="0.6"/>
+  </asset>
+
+  <default>
+    <!-- Rigid, static contact surfaces for force control:
+         - priority 1: these contact parameters are used (instead of mixing them with those of the robot geoms);
+         - solref timeconst 0.005 s (>= 2 x simulation_timestep for 1-2 ms timesteps), critically damped: stiff contact;
+         - solimp with high impedance: sub-millimetre penetration at moderate forces;
+         - friction: moderate sliding friction (0.3) so that the tool can slide along a surface while pressing on it,
+           small torsional and rolling friction;
+         - condim 3: normal force + 2D tangential friction. -->
+    <default class="rigid_surface">
+      <geom priority="1" condim="3" friction="0.3 0.005 0.0001" solref="0.005 1" solimp="0.95 0.99 0.001 0.5 2"/>
+    </default>
+    <!-- Volumes of the touch sensors: invisible (group 4), non-colliding -->
+    <default class="touch_volume">
+      <site type="box" group="4" rgba="0 1 0 0.2"/>
+    </default>
+  </default>
+
+  <worldbody>
+    <light name="top" pos="0 0 3" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="0 0 0.05" material="grid"/>
+
+    <!-- Table: 0.8 x 0.7 m, top surface at z = 0.15 m, centered at (0.15, -0.65) -->
+    <body name="table" pos="0.15 -0.65 0.075">
+      <geom name="table_top" class="rigid_surface" type="box" size="0.4 0.35 0.075" material="wood"/>
+      <site name="table_top_surface" class="touch_volume" pos="0 0 0.075" size="0.4 0.35 0.005"/>
+
+      <!-- Corner: two steel walls (4 cm thick, 8 cm high) on the table top.
+           wall_x: face at x = 0.30 (normal -x), spans y in [-0.90, -0.46]
+           wall_y: face at y = -0.50 (normal -y), spans x in [-0.10, 0.34] -->
+      <body name="corner" pos="0 0 0.075">
+        <geom name="wall_x" class="rigid_surface" type="box" pos="0.17 -0.03 0.04" size="0.02 0.22 0.04"
+              material="steel"/>
+        <geom name="wall_y" class="rigid_surface" type="box" pos="-0.03 0.17 0.04" size="0.22 0.02 0.04"
+              material="steel"/>
+        <site name="wall_x_surface" class="touch_volume" pos="0.15 -0.03 0.04" size="0.005 0.22 0.04"/>
+        <site name="wall_y_surface" class="touch_volume" pos="-0.03 0.15 0.04" size="0.22 0.005 0.04"/>
+        <!-- Ground truth: inside corner at (0.30, -0.50, 0.15) in the world -->
+        <site name="corner" type="sphere" pos="0.15 0.15 0" size="0.006" rgba="1 0.1 0.1 1"/>
+      </body>
+    </body>
+  </worldbody>
+
+  <!-- MuJoCo sensors: published by the simulator on <topic_namespace>/mujoco_sensors/<name> -->
+  <sensor>
+    <touch name="table_touch" site="table_top_surface"/>
+    <touch name="wall_x_touch" site="wall_x_surface"/>
+    <touch name="wall_y_touch" site="wall_y_surface"/>
+    <framepos name="corner_position" objtype="site" objname="corner"/>
+  </sensor>
+</mujoco>

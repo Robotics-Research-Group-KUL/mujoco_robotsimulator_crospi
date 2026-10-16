@@ -98,5 +98,7 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_
   Fast DDS shared-memory locks), messages still arrive.
 - `ROSRunner.run()` (betfsm_ros) re-parses `sys.argv`; strip the script's own arguments first. Pass `serve=False`
   to avoid its web server.
+- The example setups use `config/urdf/ur10e_cylinder_tool.urdf` = `ur10e.urdf` + fixed links `cylinder_tool`
+  (15 cm x Ø3 cm, after `tool0`) and `tool_tip`; `table_with_corner.xml` is dimensioned for this tool at `MoveHome`.
 - `config/urdf/ur10e.urdf` was generated with xacro (not installed system-wide) from `ur_description`
   (`ur_type:=ur10e name:=ur10e`); `ur_description` must be built in this workspace for the meshes.

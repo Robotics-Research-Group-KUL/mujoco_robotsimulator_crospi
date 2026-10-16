@@ -68,9 +68,15 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py \
     --tasks MoveHome sine --repetitions 1 --tick-frequency 100 --publish-frequency 5
 ```
 
-With [betfsm_demos_tasks.json](betfsm_tasks_examples/betfsm_demos_tasks.json), `MoveHome` brings the robot above the
-table of the example environment, and the vertical sine wave of `sine` makes the end effector touch the table
-(visible in `tcp_wrench`, see Example 3).
+With [betfsm_demos_tasks.json](betfsm_tasks_examples/betfsm_demos_tasks.json), `MoveHome` brings the robot to
+joints `[4.7116, -1.5708, 2.0944, -2.0944, -1.5708, 0]`: tool pointing down, `tool0` at (0.174, -0.615, 0.391) m and
+the tip of the cylindrical tool at (0.174, -0.615, 0.241) m. `sine` then moves the tool up and down along z.
+
+This pose is designed for the corner environment
+([table_with_corner.xml](config/environments/table_with_corner.xml)): set
+`"environment_mjcf_path": "$[mujoco_robotsimulator_crospi]/config/environments/table_with_corner.xml"` in the setup
+file, and the tool tip is then 9 cm above its table. In `table_with_box.xml` (table top at z = 0.40 m) this pose is
+inside the table, so `MoveHome` is blocked by the contact.
 
 Other setup files: replace `ur10e_position_servo` by `ur10e_kinematic` (perfect tracking, no environment) or
 `ur10e_velocity_servo` (no environment, no viewer).
@@ -158,8 +164,8 @@ messages.
 | MuJoCo sensor `<name>` | – | `<ns>/mujoco_sensors/<name>` | as defined by the [MuJoCo sensor](https://mujoco.readthedocs.io/en/stable/XMLreference.html#sensor) (e.g. `framepos` in the world unless `reftype`/`refname` are given; `touch` is a scalar normal force) | raw `sensordata` of the sensor |
 
 **TCP wrench.** The end effector is the rigid body group of `tcp_link` (all the links welded to it with fixed joints,
-e.g. `wrist_3_link`, `flange`, `ft_frame` and `tool0` of a UR robot) plus all the links mounted after it (e.g. a
-gripper). The wrench is the sum of all the contact forces/torques between the end effector and the rest of the scene,
+e.g. `wrist_3_link`, `flange`, `ft_frame` and `tool0` of a UR robot) plus all the links mounted after it (e.g. the
+`cylinder_tool` of the example URDF, or a gripper). The wrench is the sum of all the contact forces/torques between the end effector and the rest of the scene,
 moved to the origin of `tcp_link`. Its sign is the wrench that the end effector **exerts on the environment**: e.g.
 with `tcp_link = tool0` pointing down, pressing on a table gives a positive force along the z axis of `tool0`. It is
 zero without contact and contains no gravity or inertia of the links (as an ideally compensated force/torque sensor).
@@ -183,7 +189,7 @@ documentation are available). Complete example:
     "robot_joints": ["shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint", "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"],
     "initial_joints": [0.0, -1.5708, 1.5708, -1.5708, -1.5708, 0.0],
     "periodicity": 0.01,
-    "urdf_path": "$[mujoco_robotsimulator_crospi]/config/urdf/ur10e.urdf",
+    "urdf_path": "$[mujoco_robotsimulator_crospi]/config/urdf/ur10e_cylinder_tool.urdf",
     "environment_mjcf_path": "$[mujoco_robotsimulator_crospi]/config/environments/table_with_box.xml",
     "base_position": [0.0, 0.0, 0.0],
     "base_quaternion_xyzw": [0.0, 0.0, 0.0, 1.0],
@@ -321,8 +327,10 @@ All arguments are required.
 | [config/ur10e_kinematic.setup.json](config/ur10e_kinematic.setup.json) | Kinematic mode, ground plane, viewer, publishes `joint_state`, `tcp_pose`, `tcp_twist` |
 | [config/ur10e_position_servo.setup.json](config/ur10e_position_servo.setup.json) | Position servo in the table environment, all feedback, viewer, publishes all sensors |
 | [config/ur10e_velocity_servo.setup.json](config/ur10e_velocity_servo.setup.json) | Velocity servo, ground plane, no viewer, publishes all sensors (`joint_state`) |
-| [config/urdf/ur10e.urdf](config/urdf/ur10e.urdf) | UR10e URDF generated from `ur_description` (meshes from `package://ur_description`) |
+| [config/urdf/ur10e_cylinder_tool.urdf](config/urdf/ur10e_cylinder_tool.urdf) | UR10e with a cylindrical contact tool (used by all the example setups): link `cylinder_tool` (15 cm long, 3 cm diameter, solid aluminium, 0.286 kg) fixed to `tool0` along its +z axis, and the frame `tool_tip` at the center of its free end. With `tcp_link = tool0`, the wrench of contacts on the cylinder is reported at `tool0`, as a force/torque sensor between flange and tool |
+| [config/urdf/ur10e.urdf](config/urdf/ur10e.urdf) | Plain UR10e URDF generated from `ur_description` (meshes from `package://ur_description`), without tool |
 | [config/environments/table_with_box.xml](config/environments/table_with_box.xml) | Floor, table (top at z = 0.4 m, next to the robot on the -y side), free box; sensors `box_position`, `box_orientation`, `table_top_touch` |
+| [config/environments/table_with_corner.xml](config/environments/table_with_corner.xml) | Corner localization with guarded motions of the cylindrical tool: table (top at z = 0.15 m) with an inside corner formed by two 8 cm walls (faces at x = 0.30 and y = -0.50; corner at (0.30, -0.50, 0.15)); at the `MoveHome` pose the tool tip is 9 cm above the table, ~11 cm from `wall_x` and ~10 cm from `wall_y`. Stiff, moderately frictional contacts; sensors `table_touch`, `wall_x_touch`, `wall_y_touch` [N] and the ground truth `corner_position` [m]. Use it via `environment_mjcf_path` |
 | [betfsm_tasks_examples/betfsm_demos_tasks.json](betfsm_tasks_examples/betfsm_demos_tasks.json) | Task list for `run_crospi_tasks.py`. `MoveHome`, `sine`, `MoveBSpline`, `MoveBSplineCVel` use task specifications of `betfsm_demos`; `MovingDown`/`MovingUp` require `crospi_application_template` |
 
 Each setup file is a complete crospi setup: one simulator (the crospi_node constructs all the entries of
