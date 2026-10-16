@@ -38,7 +38,7 @@ sinusoidal joint velocity.
 
 ```bash
 # Terminal 1: viewer
-ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
+PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
     --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60
 
 # Terminal 2: UR10e with a position servo, next to a table with a box, for 20 s in real time
@@ -59,7 +59,7 @@ ros2 run crospi_core crospi_node --ros-args \
     -p simulation:=true
 
 # Terminal 2: viewer
-ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
+PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
     --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60
 
 # Terminal 3: tasks: move home in joint space, then a Cartesian sine wave along z (runs until Ctrl-C)
@@ -317,6 +317,21 @@ All arguments are required.
 - The viewer can be started before or after the simulator and reloads the model when the simulator restarts. It
   receives the compiled model as a binary MJB, so its python `mujoco` must have the same version as the MuJoCo
   library of the plugin.
+- **Wayland sessions (e.g. GNOME on Ubuntu): viewer window without title bar.** If the viewer window has no title bar
+  (no close/maximize/minimize buttons, it cannot be maximized), run it with the X11 backend of GLFW:
+
+  ```bash
+  PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
+      --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60
+  ```
+
+  Why: in a Wayland session, the python `glfw` package (used by the MuJoCo viewer) opens a native Wayland window, and
+  on Wayland the application must draw its own title bar. GLFW does it through `libdecor`, which needs a decoration
+  plugin (e.g. the package `libdecor-0-plugin-1-gtk`); without that plugin the window has no title bar.
+  `PYGLFW_LIBRARY_VARIANT=x11` makes `glfw` use its X11 library instead: the window runs through XWayland and the
+  desktop draws the usual title bar. Alternatives: install the plugin (`sudo apt install libdecor-0-plugin-1-gtk`),
+  or add `export PYGLFW_LIBRARY_VARIANT=x11` to `~/.bashrc`. Without a title bar, the desktop shortcuts still work
+  (e.g. GNOME: Super+Up to maximize, Alt+F4 to close).
 
 ---
 
@@ -379,6 +394,9 @@ the application.
   harmless (messages are still delivered).
 - **Viewer fails to load the model**: the python `mujoco` version differs from the MuJoCo library of the plugin
   (printed when the simulator is constructed).
+- **Viewer window without title bar (close/maximize/minimize) on Wayland**: start it with
+  `PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py ...` (see
+  [Executables](#executables) for the explanation).
 - **The dynamic simulation is unstable**: reduce `simulation_timestep`, reduce the gains or increase
   `joint_armature`.
 
