@@ -90,9 +90,9 @@ for c_mm in [float(a) for a in sys.argv[1:]]:
            rim during landing deeper than the width of the thin overlaps at the edge, and MuJoCo resolves these
            overlaps sideways, which artificially pushes a peg resting on the rim into the hole;
          - friction: 0.3 (dry steel on steel/aluminium), small torsional and rolling friction;
-         - condim 3: normal force + 2D tangential friction. -->
+         - condim 3: normal force + 2D tangential friction. condim 1: normal force only, without friction. -->
     <default class="rigid_surface">
-      <geom priority="1" condim="3" friction="0.3 0.005 0.0001" solref="0.002 1" solimp="0.95 0.99 0.001 0.5 2"/>
+      <geom priority="1" condim="1" friction="0.3 0.005 0.0001" solref="0.002 1" solimp="0.95 0.99 0.001 0.5 2"/>
     </default>
   </default>
 

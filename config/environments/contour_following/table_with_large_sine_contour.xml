@@ -460,9 +460,9 @@
          - solref timeconst 0.02 s, critically damped, and solimp 0.9-0.95 (MuJoCo defaults): stiff contact (about
            0.01 mm penetration at 10 N) that is still compliant enough to avoid force chattering while sliding;
          - friction: moderate sliding friction (0.3), small torsional and rolling friction;
-         - condim 3: normal force + 2D tangential friction. -->
+         - condim 3: normal force + 2D tangential friction. condim 1: normal force only, without friction. -->
     <default class="rigid_surface">
-      <geom priority="1" condim="3" friction="0.3 0.005 0.0001" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2"/>
+      <geom priority="1" condim="1" friction="0.0 0.0 0.0" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2"/>
     </default>
   </default>
 
