@@ -1,0 +1,24 @@
+<!--
+  Empty environment for mujoco_robotsimulator_crospi: only a floor (plane at z = 0) and a light.
+  The robot (URDF) is attached to the world of this scene at base_position / base_quaternion_xyzw.
+  The physics options (timestep, gravity, integrator, contacts) of this file are overwritten by the
+  crospi configuration of the simulator.
+  Do not combine it with "add_ground_plane": true (the floor would be duplicated).
+-->
+<mujoco model="empty">
+  <compiler angle="radian"/>
+
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.6 0.6 0.6"/>
+  </visual>
+
+  <asset>
+    <texture name="grid" type="2d" builtin="checker" rgb1="0.2 0.3 0.4" rgb2="0.3 0.4 0.5" width="512" height="512"/>
+    <material name="grid" texture="grid" texrepeat="4 4" reflectance="0.1"/>
+  </asset>
+
+  <worldbody>
+    <light name="top" pos="0 0 3" dir="0 0 -1" directional="true"/>
+    <geom name="floor" type="plane" size="0 0 0.05" material="grid"/>
+  </worldbody>
+</mujoco>

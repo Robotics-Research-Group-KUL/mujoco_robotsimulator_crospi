@@ -19,22 +19,32 @@ There are no unit tests; verify changes by running the executables:
 # plugin alone, all three modes (prints the max tracking error; kinematic ≈ 1e-5, servos < 0.07 rad)
 for m in kinematic position_servo velocity_servo; do
   ros2 run mujoco_robotsimulator_crospi test_mujoco_robotsimulator \
-    --config "\$[mujoco_robotsimulator_crospi]/config/setups/ur10e_$m.setup.json" --simulator-index 0 \
+    --config "\$[crospi_application_template]/applications/application_mujoco_examples_ur10e/ur10e_$m.setup.json" --simulator-index 0 \
     --duration 4 --amplitude 0.5 --frequency 0.25 --real-time false --csv none
 done
 
 # end-to-end: crospi_node + BeTFSM tasks (expect "Finished with outcome SUCCEED")
 /opt/ros2_crospi_ws/install/crospi_core/lib/crospi_core/crospi_node --ros-args \
-  -p config_file:='$[mujoco_robotsimulator_crospi]/config/setups/ur10e_position_servo.setup.json' -p simulation:=true &
+  -p config_file:='$[crospi_application_template]/applications/application_mujoco_examples_ur10e/ur10e_position_servo.setup.json' -p simulation:=true &
 ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_robotsimulator_crospi]/betfsm_tasks_examples/betfsm_demos_tasks.json' \
   --tasks MoveHome --repetitions 1 --tick-frequency 100 --publish-frequency 5
+
+# force-control demo, headless, recorded (expect "Runner finished with outcome SUCCEED"; ~70 s)
+docs/record_demo.sh '$[crospi_application_template]/applications/application_mujoco_examples_ur10e/ur10e_contour_following_circular.setup.json' \
+  ../crospi_application_template/skill_specifications/libraries/skill_lib_example/circular_contour_following_example/circular_contour_following_example.py \
+  /tmp/circular.npz 240
 ```
 
+- The example setup files and the tool URDFs live in `crospi_application_template`
+  (`applications/application_mujoco_examples_ur10e/`, `robot_models/urdf_models/robot_setups/ur10e/`; copies of the
+  URDFs stay in `config/urdf/`). The BeTFSM force-control demos (guarded motions, circular and large sine contour
+  following) are in its `skill_specifications/libraries/skill_lib_example/` and documented in its README.
+  `ur10e_position_servo.setup.json` uses the empty environment (`config/environments/empty/empty.xml`).
 - Kill background `crospi_node`s by PID afterwards: `timeout ... ros2 run crospi_node` does NOT kill the node
   process, and two nodes with the same name make the BeTFSM tasks CANCEL. Check with `pgrep -af crospi_node`.
 - `betfsm_tasks_examples/betfsm_demos_tasks.json` is a copy of the betfsm_demos task list with a modified `MoveHome`
   (robot above the table, so `sine` touches it). `sine` runs forever (`execution_time: -10`); use `MoveHome` for
-  pass/fail tests. `MovingDown`/`MovingUp` need crospi_application_template (not installed).
+  pass/fail tests. `MovingDown`/`MovingUp` need crospi_application_template.
 - README.md is the user-facing reference (quick start, frames table, troubleshooting): keep it in sync.
 - `mujoco_viewer.py` opens a GUI window; test its data path headlessly by subscribing to the topics instead.
 
@@ -52,6 +62,10 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_
 - `Measurements` (in `ros_publisher.hpp`) is computed once per update by `compute_measurements()` and used both by
   `write_feedback()` (crospi) and the publisher; the `need_*_` flags are the union of feedback and publication needs.
 - `src/test_mujoco_robotsimulator.cpp`, `scripts/mujoco_viewer.py`, `scripts/run_crospi_tasks.py`: test executables.
+- `docs/` (not installed): README images. `generate_snapshots.py` (environment PNGs); `record_demo.sh` (runs a
+  crospi_node + BeTFSM script headless and records it with `record_states.py`, which stores the MJB model + states
+  of the visualization topics in a `.npz`); `render_gif.py` (offscreen GIF from a `.npz`, free camera). The exact
+  commands/cameras of the demo GIFs of crospi_application_template are in README "Documentation images and GIFs".
 
 ## Project rules
 
@@ -65,7 +79,7 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_
 - `control_mode` is an object with one `is-<mode>` key + that mode's parameters (crospi discriminator convention,
   schema `dependencies` keyed by `is-<mode>`); the old flat format (string `control_mode`, top-level gains) is rejected
   with a migration message.
-- Keep the schema, `parse_config`, the README parameter table and the example `config/setups/*.setup.json` in sync.
+- Keep the schema, `parse_config`, the README parameter table and the example setup files (in crospi_application_template) in sync.
 - Follow the template conventions: namespace `etasl`, `PLUGINLIB_EXPORT_CLASS(..., etasl::RobotDriver)` while
   `plugins.xml` uses `base_class_type="etasl::RobotSimulator"`, errors built with `fmt::format`.
 
@@ -101,14 +115,14 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_
   Fast DDS shared-memory locks), messages still arrive.
 - `ROSRunner.run()` (betfsm_ros) re-parses `sys.argv`; strip the script's own arguments first. Pass `serve=False`
   to avoid its web server.
-- The example setups use `config/urdf/ur10e_cylinder_tool.urdf` = `ur10e.urdf` + fixed links `cylinder_tool`
+- The example setups use `ur10e_cylinder_tool.urdf` (crospi_application_template; copy in `config/urdf/`) = `ur10e.urdf` + fixed links `cylinder_tool`
   (15 cm x Ø3 cm, after `tool0`) and `tool_tip`; `table_with_corner.xml` is dimensioned for this tool at `MoveHome`.
 - `config/urdf/ur10e.urdf` was generated with xacro (not installed system-wide) from `ur_description`
   (`ur_type:=ur10e name:=ur10e`); `ur_description` must be built in this workspace for the meshes.
 
 ## Environment modelling (config/environments)
 
-- Layout: one folder per task (`pick_and_place`, `guarded_motions`, `contour_following`, `peg_insertion_cylindrical`,
+- Layout: one folder per task (`empty`, `pick_and_place`, `guarded_motions`, `contour_following`, `peg_insertion_cylindrical`,
   `peg_insertion_rectangular`); the peg-insertion generators live next to their files and write into their own folder.
   The whole `config/` directory is installed, so new folders need no CMake change.
 
@@ -126,6 +140,11 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py --task-list '$[mujoco_
   peg 0.34 mm off the axis, i.e. on the rim of the tight holes. Re-derive these constants if MoveHome or the
   URDF changes (the generators hold them as constants).
 - README snapshots: `docs/images/*.png`, rendered by `docs/generate_snapshots.py` (needs MUJOCO_GL=glfw here: no EGL/OSMesa).
+  Demo GIFs: `docs/record_demo.sh` + `docs/render_gif.py` (same MUJOCO_GL requirement; no ffmpeg here, GIFs are
+  written with PIL). Look at sample frames before committing: from the snapshot camera of the large sine contour the
+  wall hides the tool (use azimuth -160, elevation -55). The demo GIFs are copied into
+  `crospi_application_template/docs/images/` (separate git repo, so no cross-repo image links).
+- `pgrep -f crospi_node` also matches the shell running the command; use `pgrep -x` / `pkill -x crospi_node`.
   Re-render after changing an environment, and look at the images: they revealed that the round wall segments of the
   cylindrical-hole block protruded outside the square block.
 - Validation scripts used so far (probe bodies on slide joints, IK reachability along the path) live in the session

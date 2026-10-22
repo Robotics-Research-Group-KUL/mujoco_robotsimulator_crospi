@@ -41,9 +41,13 @@ WIDTH, HEIGHT = 1200, 675
 
 MOVE_HOME = [4.7116, -1.5708, 2.0944, -2.0944, -1.5708, 0.0]
 INITIAL = [0.0, -1.5708, 1.5708, -1.5708, -1.5708, 0.0]
+INITIAL_SETUPS = [-1.57, -1.5708, 1.5708, -1.5708, -1.5708, 0.0]  # initial_joints of the example setup files
 
 # image name: (environment, urdf, joints, [(suffix, lookat, distance, azimuth, elevation), ...])
 SNAPSHOTS = {
+    'empty': (
+        'empty/empty.xml', 'ur10e_cylinder_tool.urdf', INITIAL_SETUPS,
+        [('', [0.0, -0.3, 0.5], 2.6, 135, -20)]),
     'pick_and_place_table_with_box': (
         'pick_and_place/table_with_box.xml', 'ur10e_cylinder_tool.urdf', INITIAL,
         [('', [0.3, -0.5, 0.4], 2.6, 135, -25)]),

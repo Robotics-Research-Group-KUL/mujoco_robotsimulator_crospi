@@ -23,39 +23,78 @@ A [crospi](https://rob.pages.gitlab.kuleuven.be/crospi/) robot simulator plugin 
 ### Build
 
 ```bash
-cd <your_ws>            # workspace that contains this package and Universal_Robots_ROS2_Description
-colcon build --symlink-install --packages-up-to mujoco_robotsimulator_crospi ur_description
+cd <your_ws>            # workspace with this package, crospi_application_template and Universal_Robots_ROS2_Description
+colcon build --symlink-install --packages-up-to mujoco_robotsimulator_crospi crospi_application_template ur_description
 source install/setup.bash
 ```
 
 Source the workspace (`source install/setup.bash`) in every new terminal. In bash, the `$` of `$[package]` paths
 must be escaped (`\$[...]`), as in the commands below.
 
+### Where are the example files?
+
+The example files are split over two packages:
+
+| Package | Folder | Content |
+|---------|--------|---------|
+| `mujoco_robotsimulator_crospi` (this package) | [config/environments/](config/environments/) | MJCF environments (empty, tables, contours, holes, ...), see [Environments](#environments) |
+| `crospi_application_template` | `applications/application_mujoco_examples_ur10e/` | Crospi setup files (`*.setup.json`) that use this simulator |
+| `crospi_application_template` | `robot_models/urdf_models/robot_setups/ur10e/` | URDFs of the UR10e with the contact tools (`ur10e_cylinder_tool.urdf`, `ur10e_rectangular_tool.urdf`), used by the setup files |
+| `crospi_application_template` | `skill_specifications/libraries/skill_lib_example/` | BeTFSM python scripts + task lists of the [force-control demos](#force-control-demos) |
+
+---
+
+## Basic free-space examples
+
+Both examples use `ur10e_position_servo.setup.json`: the UR10e with the cylindrical tool, a position servo, and the
+empty environment ([empty/empty.xml](config/environments/empty/empty.xml): only a floor at z = 0), so the robot
+moves in free space. The robot starts at the `initial_joints` of the setup file,
+`[-1.57, -1.5708, 1.5708, -1.5708, -1.5708, 0]`:
+
+<img src="docs/images/empty.png" width="49%"/>
+
+Other setup files: replace `ur10e_position_servo` by `ur10e_kinematic` (perfect tracking, ground plane) or
+`ur10e_velocity_servo` (ground plane, no viewer).
+
 ### Example 1: simulator alone + viewer (no crospi_node, no eTaSL)
 
 The test executable loads the simulator plugin (exactly as the crospi_node does) and drives all the joints with a
-sinusoidal joint velocity.
+sinusoidal joint velocity `qd(t) = 0.5 sin(2π 0.25 t)` rad/s for 20 s in real time. At the end, it prints the
+tracking error of the position servo with respect to the ideal motion and writes all samples to a CSV file.
 
 ```bash
 # Terminal 1: viewer
 PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
     --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60
 
-# Terminal 2: UR10e with a position servo, next to a table with a box, for 20 s in real time
+# Terminal 2: simulator
 ros2 run mujoco_robotsimulator_crospi test_mujoco_robotsimulator \
-    --config "\$[mujoco_robotsimulator_crospi]/config/setups/ur10e_position_servo.setup.json" \
+    --config "\$[crospi_application_template]/applications/application_mujoco_examples_ur10e/ur10e_position_servo.setup.json" \
     --simulator-index 0 --duration 20 --amplitude 0.5 --frequency 0.25 \
     --real-time true --csv /tmp/mujoco_test.csv
 ```
 
-At the end, it prints the tracking error with respect to the ideal motion and writes all samples to the CSV file.
+To plot the joint torques of the CSV file:
+
+```bash
+python3 -c "
+import numpy as np, matplotlib.pyplot as plt
+d = np.genfromtxt('/tmp/mujoco_test.csv', delimiter=',', names=True)
+for i in range(6): plt.plot(d['time'], d[f'tau_{i}'], label=f'joint {i}')
+plt.xlabel('time [s]'); plt.ylabel('torque [Nm]'); plt.legend(); plt.grid(); plt.show()"
+```
 
 ### Example 2: crospi_node + eTaSL tasks + viewer
+
+The crospi_node runs the simulator, and two eTaSL tasks are executed with BeTFSM: `MoveHome` moves in joint space to
+`[-1.57, -1.5708, 2.0944, -2.0944, -1.5708, 0]` (tool pointing down, `tool0` at about (0.174, -0.615, 0.391) m and
+the tip of the cylindrical tool at (0.174, -0.615, 0.241) m), then `sine` moves the tool up and down along z until
+Ctrl-C. The tasks are defined in [betfsm_demos_tasks.json](betfsm_tasks_examples/betfsm_demos_tasks.json).
 
 ```bash
 # Terminal 1: crospi node using the MuJoCo simulator
 ros2 run crospi_core crospi_node --ros-args \
-    -p config_file:="\$[mujoco_robotsimulator_crospi]/config/setups/ur10e_position_servo.setup.json" \
+    -p config_file:="\$[crospi_application_template]/applications/application_mujoco_examples_ur10e/ur10e_position_servo.setup.json" \
     -p simulation:=true
 
 # Terminal 2: viewer
@@ -68,22 +107,12 @@ ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py \
     --tasks MoveHome sine --repetitions 1 --tick-frequency 100 --publish-frequency 5
 ```
 
-With [betfsm_demos_tasks.json](betfsm_tasks_examples/betfsm_demos_tasks.json), `MoveHome` brings the robot to
-joints `[4.7116, -1.5708, 2.0944, -2.0944, -1.5708, 0]`: tool pointing down, `tool0` at (0.174, -0.615, 0.391) m and
-the tip of the cylindrical tool at (0.174, -0.615, 0.241) m. `sine` then moves the tool up and down along z.
+The `MoveHome` pose is the starting pose of the guarded-motion, contour-following and peg-insertion environments
+(see [Environments](#environments)).
 
-This pose is designed for the corner environment
-([table_with_corner.xml](config/environments/guarded_motions/table_with_corner.xml)): set
-`"environment_mjcf_path": "$[mujoco_robotsimulator_crospi]/config/environments/guarded_motions/table_with_corner.xml"` in the setup
-file, and the tool tip is then 9 cm above its table. In `table_with_box.xml` (table top at z = 0.40 m) this pose is
-inside the table, so `MoveHome` is blocked by the contact.
+### Plot the sensor values
 
-Other setup files: replace `ur10e_position_servo` by `ur10e_kinematic` (perfect tracking, no environment) or
-`ur10e_velocity_servo` (no environment, no viewer).
-
-### Example 3: plot the sensor values
-
-While Example 1 or 2 is running:
+While an example (or a force-control demo) is running:
 
 ```bash
 ros2 topic list | grep /mujoco_sim/sensors
@@ -91,29 +120,34 @@ ros2 topic echo /mujoco_sim/sensors/tcp_wrench
 ros2 run plotjuggler plotjuggler   # Streaming: ROS2 Topic Subscriber -> select /mujoco_sim/sensors/...
 ```
 
-For instance, plot `/mujoco_sim/sensors/joint_states/effort` (joint torques), `/mujoco_sim/sensors/tcp_wrench` (contact
-with the table) or `/mujoco_sim/sensors/mujoco_sensors/table_top_touch` (normal force on the table: 4.9 N with only
-the box on it).
+For instance, plot `/mujoco_sim/sensors/joint_states/effort` (joint torques) or `/mujoco_sim/sensors/tcp_wrench`
+(contact wrench of the tool: zero in free space). With the environments that define MuJoCo sensors, they are
+published on `/mujoco_sim/sensors/mujoco_sensors/<name>` (e.g. `table_touch`, `contour_touch`).
 
-To plot the CSV file of Example 1 instead:
+---
 
-```bash
-python3 -c "
-import numpy as np, matplotlib.pyplot as plt
-d = np.genfromtxt('/tmp/mujoco_test.csv', delimiter=',', names=True)
-for i in range(6): plt.plot(d['time'], d[f'tau_{i}'], label=f'joint {i}')
-plt.xlabel('time [s]'); plt.ylabel('torque [Nm]'); plt.legend(); plt.grid(); plt.show()"
-```
+## Force-control demos
+
+Guarded motions (corner localization) and contour following (circular and large sine contours) with force control are
+described, with all the commands, in the
+[README of crospi_application_template](https://github.com/Robotics-Research-Group-KUL/crospi_application_template#force-control-demos-with-the-mujoco-simulator).
+Their BeTFSM python scripts are in `skill_specifications/libraries/skill_lib_example/` of `crospi_application_template`.
 
 ---
 
 ## Environments
 
 Snapshots of the environments in `config/environments/` with the UR10e (orange: contact tool / peg), at the pose
-for which they are designed (`MoveHome`, except for pick and place). Details (dimensions, sensors, contact
+for which they are designed (`MoveHome`, except for empty and pick and place). Details (dimensions, sensors, contact
 properties) are in [Example files](#example-files) and in the header comment of each XML file. The images are
 generated with [docs/generate_snapshots.py](docs/generate_snapshots.py) (`MUJOCO_GL=glfw python3 docs/generate_snapshots.py`,
 from a sourced workspace).
+
+### Empty: `empty/empty.xml`
+
+Only a floor (plane at z = 0) and a light, for free-space motions (do not combine it with `"add_ground_plane": true`).
+
+<img src="docs/images/empty.png" width="49%"/>
 
 ### Pick and place: `pick_and_place/table_with_box.xml`
 
@@ -230,16 +264,16 @@ In the kinematic mode, the contact forces are those consistent with the imposed 
 The simulator is configured as an entry of `robot/robotsimulators` in the crospi setup file and is selected with
 `"is-mujoco_robotsimulator_crospi": true`. Every parameter is documented in the
 [JSON schema](json_schemas/mujoco_robotsimulator_crospi.schema.json) (with an IDE such as VS Code, autocompletion and
-documentation are available). Complete example:
-[config/setups/ur10e_position_servo.setup.json](config/setups/ur10e_position_servo.setup.json):
+documentation are available). Example, based on the
+simulator entry of `ur10e_pick_and_place.setup.json` (in `crospi_application_template/applications/application_mujoco_examples_ur10e/`), with fewer feedback channels (`name_expr_*`):
 
 ```json
 {
     "is-mujoco_robotsimulator_crospi": true,
     "robot_joints": ["shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint", "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"],
-    "initial_joints": [0.0, -1.5708, 1.5708, -1.5708, -1.5708, 0.0],
+    "initial_joints": [-1.57, -1.5708, 1.5708, -1.5708, -1.5708, 0.0],
     "periodicity": 0.01,
-    "urdf_path": "$[mujoco_robotsimulator_crospi]/config/urdf/ur10e_cylinder_tool.urdf",
+    "urdf_path": "$[crospi_application_template]/robot_models/urdf_models/robot_setups/ur10e/ur10e_cylinder_tool.urdf",
     "environment_mjcf_path": "$[mujoco_robotsimulator_crospi]/config/environments/pick_and_place/table_with_box.xml",
     "base_position": [0.0, 0.0, 0.0],
     "base_quaternion_xyzw": [0.0, 0.0, 0.0, 1.0],
@@ -399,12 +433,60 @@ All arguments are required.
 
 ---
 
+## Documentation images and GIFs
+
+The scripts in [docs/](docs/) (not installed; run them from this package folder in a sourced workspace) render the
+images of the READMEs. Rendering needs an OpenGL context: `MUJOCO_GL=glfw` (with a display). All arguments are
+required.
+
+| Script | Purpose |
+|--------|---------|
+| [docs/generate_snapshots.py](docs/generate_snapshots.py) | Snapshots of the environments (`docs/images/*.png`, see [Environments](#environments)): `MUJOCO_GL=glfw python3 docs/generate_snapshots.py`. The environments, URDFs, joint configurations and cameras are listed in `SNAPSHOTS` |
+| [docs/record_demo.sh](docs/record_demo.sh) | Runs a demo headless (crospi_node + BeTFSM script, no viewer) and records it with `record_states.py`: `docs/record_demo.sh <setup file> <BeTFSM script> <output.npz> <timeout [s]>`. The script is run from its own folder and stopped with SIGINT after the timeout (for scripts that loop forever); the logs are written next to the output (`<output>.node.log`, `.recorder.log`, `.script.log`). Refuses to start if a crospi_node is already running |
+| [docs/record_states.py](docs/record_states.py) | Records the visualization topics of a running simulation (model + `[time, qpos...]`) to a `.npz` file until Ctrl-C: `python3 docs/record_states.py --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --output rec.npz`. Can also record a simulation started by hand (e.g. with the viewer) |
+| [docs/render_gif.py](docs/render_gif.py) | Renders a recording to an animated GIF, offscreen with a fixed camera (as the MuJoCo viewer: lookat, distance, azimuth, elevation), the contact tool in orange: `--input`, `--output`, `--t-start`/`--t-end` [s] of simulation time (`--t-end 0`: until the end), `--speedup` (w.r.t. real time), `--fps`, `--width`/`--height`, `--lookat x y z`, `--distance`, `--azimuth`, `--elevation` |
+
+The GIFs of the force-control demos of `crospi_application_template` (`docs/images/demo_*.gif` of that package) were
+made with:
+
+```bash
+SKILLS=<your_ws>/src/crospi_application_template/skill_specifications/libraries/skill_lib_example
+SETUPS='$[crospi_application_template]/applications/application_mujoco_examples_ur10e'
+
+# Corner localization (loops forever: stopped after 150 s, the GIF shows the first loop)
+docs/record_demo.sh "$SETUPS/ur10e_guarded_motions.setup.json" \
+    $SKILLS/guarded_motion_sequence/guarded_motion_sequence.py /tmp/guarded.npz 150
+MUJOCO_GL=glfw python3 docs/render_gif.py --input /tmp/guarded.npz --output demo_guarded_motions_corner.gif \
+    --t-start 0 --t-end 38.5 --speedup 2 --fps 12 --width 640 --height 360 \
+    --lookat 0.22 -0.55 0.22 --distance 1.2 --azimuth 55 --elevation -30
+
+# Circular contour following
+docs/record_demo.sh "$SETUPS/ur10e_contour_following_circular.setup.json" \
+    $SKILLS/circular_contour_following_example/circular_contour_following_example.py /tmp/circular.npz 240
+MUJOCO_GL=glfw python3 docs/render_gif.py --input /tmp/circular.npz --output demo_contour_following_circular.gif \
+    --t-start 0 --t-end 0 --speedup 3 --fps 12 --width 640 --height 360 \
+    --lookat 0.12 -0.55 0.25 --distance 1.5 --azimuth 140 --elevation -32
+
+# Large sine contour following
+docs/record_demo.sh "$SETUPS/ur10e_contour_following_large_sine.setup.json" \
+    $SKILLS/large_sine_contour_following_example/large_sine_contour_following_example.py /tmp/large_sine.npz 400
+MUJOCO_GL=glfw python3 docs/render_gif.py --input /tmp/large_sine.npz --output demo_contour_following_large_sine.gif \
+    --t-start 0 --t-end 0 --speedup 4 --fps 12 --width 640 --height 360 \
+    --lookat 0.17 -0.68 0.2 --distance 1.5 --azimuth -160 --elevation -55
+```
+
+To choose a camera, render a single frame first (e.g. `--t-start 50 --t-end 51 --fps 1`). The GIFs are about 1.5 to
+3.6 MB at 640 x 360 and 12 fps; reduce `--fps`, the size or the duration for smaller files.
+
+---
+
 ## Example files
 
 The environments are grouped by task in `config/environments/`:
 
 | Folder | Environments |
 |--------|--------------|
+| `empty/` | `empty.xml` (only a floor at z = 0 and a light; do not combine with `"add_ground_plane": true`) |
 | `pick_and_place/` | `table_with_box.xml` |
 | `guarded_motions/` | `table_with_corner.xml` |
 | `contour_following/` | `table_with_circular_contour.xml`, `table_with_small_sine_contour.xml`, `table_with_large_sine_contour.xml` |
@@ -413,19 +495,38 @@ The environments are grouped by task in `config/environments/`:
 
 The generators write the environments next to themselves (in their own folder), wherever they are run from.
 
+**Setup files**, in `crospi_application_template/applications/application_mujoco_examples_ur10e/`:
+
+| Setup file | Description |
+|------------|-------------|
+| `ur10e_kinematic.setup.json` | Kinematic mode, ground plane, viewer, publishes `joint_state`, `tcp_pose`, `tcp_twist` |
+| `ur10e_position_servo.setup.json` | Position servo in the empty environment (`empty/empty.xml`), all feedback, viewer, publishes all sensors. Used by the [basic free-space examples](#basic-free-space-examples) |
+| `ur10e_velocity_servo.setup.json` | Velocity servo, ground plane, no viewer, publishes all sensors (`joint_state`) |
+| `ur10e_pick_and_place.setup.json` | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `pick_and_place/table_with_box.xml` |
+| `ur10e_guarded_motions.setup.json` | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `guarded_motions/table_with_corner.xml`. Used by `guarded_motion_sequence.py` ([force-control demos](#force-control-demos)) |
+| `ur10e_contour_following_circular.setup.json` | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `contour_following/table_with_circular_contour.xml`. Used by `circular_contour_following_example.py` |
+| `ur10e_contour_following_large_sine.setup.json` | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `contour_following/table_with_large_sine_contour.xml`. Used by `large_sine_contour_following_example.py` (small sine contour: change `environment_mjcf_path`) |
+| `ur10e_peg_insertion_cylindrical.setup.json` | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `peg_insertion_cylindrical/table_with_hole_1mm_clearance.xml` (other clearances: change `environment_mjcf_path`) |
+| `ur10e_peg_insertion_rectangular.setup.json` | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `peg_insertion_rectangular/table_with_rectangular_hole_1mm_clearance.xml` and the rectangular tool `ur10e_rectangular_tool.urdf` as peg, in the simulator and in the `default_robot_specification` (other clearances: change `environment_mjcf_path`) |
+
+The task setups also publish the contact force of eTaSL on `/forces_etasl` (`TopicOutputHandler`).
+
+**URDFs** used by the setup files, in `crospi_application_template/robot_models/urdf_models/robot_setups/ur10e/`
+(copies are kept in [config/urdf/](config/urdf/) of this package):
+
+| URDF | Description |
+|------|-------------|
+| `ur10e_cylinder_tool.urdf` | UR10e with a cylindrical contact tool (used by all the example setups except the rectangular peg insertion): link `cylinder_tool` (15 cm long, 3 cm diameter, solid aluminium, 0.286 kg) fixed to `tool0` along its +z axis, and the frame `tool_tip` at the center of its free end. With `tcp_link = tool0`, the wrench of contacts on the cylinder is reported at `tool0`, as a force/torque sensor between flange and tool |
+| `ur10e_rectangular_tool.urdf` | UR10e with a rectangular contact tool / peg: link `rectangular_tool` (cross-section 30 mm along x of `tool0` x 20 mm along y of `tool0`, 15 cm long, solid aluminium, 0.243 kg) fixed to `tool0` along its +z axis, and the frame `tool_tip` at the center of its free end. Use it (in `urdf_path` of the simulator and of the `default_robot_specification`) with the rectangular peg-in-hole environments |
+| [config/urdf/ur10e.urdf](config/urdf/ur10e.urdf) (this package only) | Plain UR10e URDF generated from `ur_description` (meshes from `package://ur_description`), without tool |
+
+**BeTFSM scripts**, in `crospi_application_template/skill_specifications/libraries/skill_lib_example/`: see
+[Force-control demos](#force-control-demos).
+
+**Environments and task list** of this package:
+
 | Path | Description |
 |------|-------------|
-| [config/setups/ur10e_kinematic.setup.json](config/setups/ur10e_kinematic.setup.json) | Kinematic mode, ground plane, viewer, publishes `joint_state`, `tcp_pose`, `tcp_twist` |
-| [config/setups/ur10e_position_servo.setup.json](config/setups/ur10e_position_servo.setup.json) | Position servo in the table environment, all feedback, viewer, publishes all sensors |
-| [config/setups/ur10e_velocity_servo.setup.json](config/setups/ur10e_velocity_servo.setup.json) | Velocity servo, ground plane, no viewer, publishes all sensors (`joint_state`) |
-| [config/setups/ur10e_pick_and_place.setup.json](config/setups/ur10e_pick_and_place.setup.json) | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `pick_and_place/table_with_box.xml` |
-| [config/setups/ur10e_guarded_motions.setup.json](config/setups/ur10e_guarded_motions.setup.json) | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `guarded_motions/table_with_corner.xml` |
-| [config/setups/ur10e_contour_following_circular.setup.json](config/setups/ur10e_contour_following_circular.setup.json) | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `contour_following/table_with_circular_contour.xml` (other contours: change `environment_mjcf_path`) |
-| [config/setups/ur10e_peg_insertion_cylindrical.setup.json](config/setups/ur10e_peg_insertion_cylindrical.setup.json) | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `peg_insertion_cylindrical/table_with_hole_1mm_clearance.xml` (other clearances: change `environment_mjcf_path`) |
-| [config/setups/ur10e_peg_insertion_rectangular.setup.json](config/setups/ur10e_peg_insertion_rectangular.setup.json) | Task setup: copy of `ur10e_position_servo.setup.json` with the environment `peg_insertion_rectangular/table_with_rectangular_hole_1mm_clearance.xml` and the rectangular tool `ur10e_rectangular_tool.urdf` as peg, in the simulator and in the `default_robot_specification` (other clearances: change `environment_mjcf_path`) |
-| [config/urdf/ur10e_cylinder_tool.urdf](config/urdf/ur10e_cylinder_tool.urdf) | UR10e with a cylindrical contact tool (used by all the example setups): link `cylinder_tool` (15 cm long, 3 cm diameter, solid aluminium, 0.286 kg) fixed to `tool0` along its +z axis, and the frame `tool_tip` at the center of its free end. With `tcp_link = tool0`, the wrench of contacts on the cylinder is reported at `tool0`, as a force/torque sensor between flange and tool |
-| [config/urdf/ur10e_rectangular_tool.urdf](config/urdf/ur10e_rectangular_tool.urdf) | UR10e with a rectangular contact tool / peg: link `rectangular_tool` (cross-section 30 mm along x of `tool0` x 20 mm along y of `tool0`, 15 cm long, solid aluminium, 0.243 kg) fixed to `tool0` along its +z axis, and the frame `tool_tip` at the center of its free end. Use it (in `urdf_path` of the simulator and of the `default_robot_specification`) with the rectangular peg-in-hole environments |
-| [config/urdf/ur10e.urdf](config/urdf/ur10e.urdf) | Plain UR10e URDF generated from `ur_description` (meshes from `package://ur_description`), without tool |
 | [config/environments/pick_and_place/table_with_box.xml](config/environments/pick_and_place/table_with_box.xml) | Floor, table (top at z = 0.4 m, next to the robot on the -y side), free box; sensors `box_position`, `box_orientation`, `table_top_touch` |
 | [config/environments/guarded_motions/table_with_corner.xml](config/environments/guarded_motions/table_with_corner.xml) | Corner localization with guarded motions of the cylindrical tool: table (top at z = 0.15 m) with an inside corner formed by two 8 cm walls (faces at x = 0.30 and y = -0.50; corner at (0.30, -0.50, 0.15)); at the `MoveHome` pose the tool tip is 9 cm above the table, ~11 cm from `wall_x` and ~10 cm from `wall_y`. Stiff, moderately frictional contacts; sensors `table_touch`, `wall_x_touch`, `wall_y_touch` [N] and the ground truth `corner_position` [m]. Use it via `environment_mjcf_path` |
 | [config/environments/contour_following/table_with_circular_contour.xml](config/environments/contour_following/table_with_circular_contour.xml) | Contour following with force feedback: table (top at z = 0.15 m) with a hollow circular contour (ring wall, inner diameter 0.35 m, 8 cm high, made of 180 box segments, < 0.03 mm from a circle) centered at (0.174, -0.615), right below the tool at the `MoveHome` pose. The whole contour is reachable with the tool pointing down. Contact stiffness tuned for sliding without force chattering; sensors `table_touch`, `contour_touch` [N] and the ground truth `contour_center` [m]. Use it via `environment_mjcf_path` |
@@ -435,13 +536,15 @@ The generators write the environments next to themselves (in their own folder), 
 | [config/environments/peg_insertion_rectangular/table_with_rectangular_hole_{0.1,0.5,1,2}mm_clearance.xml](config/environments/peg_insertion_rectangular/) | Rectangular peg-in-hole with the peg of `ur10e_rectangular_tool.urdf` (30 x 20 mm): same block, depth, contact properties, sensors and timestep requirement as the cylindrical holes, with a rectangular hole of **diametral** clearance 0.1, 0.5, 1 or 2 mm in each direction (hole 30.1 x 20.1 / 30.5 x 20.5 / 31 x 21 / 32 x 22 mm), sharp edges. The hole is centered on the axis of the peg at `MoveHome` and aligned with it (rotated by -0.000789 rad about z, the yaw of `tool0` at `MoveHome`): a straight vertical motion from `MoveHome` inserts the peg. Additional sensor `hole_orientation` (ground-truth quaternion of the hole frame). Generated with [generate_rectangular_peg_in_hole_environments.py](config/environments/peg_insertion_rectangular/generate_rectangular_peg_in_hole_environments.py) (other clearances: `python3 generate_rectangular_peg_in_hole_environments.py <clearance_mm> ...`) |
 | [betfsm_tasks_examples/betfsm_demos_tasks.json](betfsm_tasks_examples/betfsm_demos_tasks.json) | Task list for `run_crospi_tasks.py`. `MoveHome`, `sine`, `MoveBSpline`, `MoveBSplineCVel` use task specifications of `betfsm_demos`; `MovingDown`/`MovingUp` require `crospi_application_template` |
 
-The setup files are in `config/setups/`: three examples of the control modes and one setup per task (one per folder of
-`config/environments/`). All of them use the cylindrical tool (`ur10e_cylinder_tool.urdf`), except
-`ur10e_peg_insertion_rectangular.setup.json`, which uses the rectangular tool (`ur10e_rectangular_tool.urdf`). Each setup file is a complete crospi setup: one simulator (the crospi_node constructs all the entries of
+The setup files (in `crospi_application_template/applications/application_mujoco_examples_ur10e/`) are three
+examples of the control modes and the task setups (one per folder of `config/environments/`, two for contour
+following). Each setup file is a complete crospi setup: one simulator (the crospi_node constructs all the entries of
 `robotsimulators`), a `default_robot_specification` with the same URDF, a `JointStateOutputHandler` (`/joint_states`)
-and `"$defs": {}` (required by the crospi_node). They do not reference a bundled `"$schema"`; to use them inside an
-application package (e.g. `crospi_application_template`), add the schema of this package to the bundled schema of
-the application.
+and `"$defs": {}` (required by the crospi_node). They refer to the URDFs of `crospi_application_template`
+(`$[crospi_application_template]/robot_models/...`) and to the environments of this package
+(`$[mujoco_robotsimulator_crospi]/config/environments/...`). They do not reference a `"$schema"`; for
+autocompletion, the schema of this package is included in the bundled schema of `crospi_application_template`
+(`schemas/generated/`).
 
 ---
 
@@ -508,9 +611,8 @@ particular the tutorials on
 Published under the [GNU LESSER GENERAL PUBLIC LICENSE](LICENSE) Version 3, 29 June 2007.
 
 
-<a href="https://aiprism.eu/"><img src="./Ai-Prism_Logo_Horizontal.png" alt="AI-PRISM Logo" width="150" /></a>
-This work was funded by the European Union’s Horizon 2020 research and innovation program
-under the grant agreement No. <a href="https://cordis.europa.eu/project/id/101058589">101058589</a> ( <a href="https://aiprism.eu/">AI-Prism</a>)
+
+This work was funded by AU2WIRE_IRVA Flanders Project.
 
 <p/>
 
