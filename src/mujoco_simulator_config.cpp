@@ -361,6 +361,9 @@ SimulatorConfig parse_config(const Json::Value& config, std::shared_ptr<etasl::J
         if (vis.publish_period <= 0.0) {
             fail("parameter 'visualization/publish_period' must be strictly positive.");
         }
+        if (v.isMember("contact_topic")) {
+            vis.contact_topic = read_string(v, "contact_topic");
+        }
         c.visualization = vis;
     }
 

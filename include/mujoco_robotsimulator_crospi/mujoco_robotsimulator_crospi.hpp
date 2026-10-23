@@ -66,6 +66,11 @@ class mujoco_robotsimulator_crospi : public RobotSimulator {
         int tcp_body_id_ = -1;
         std::vector<bool> end_effector_body_;  // bodies whose contacts contribute to the tcp wrench
 
+        // Contact forces for visualization (optional, visualization/contact_topic)
+        std::vector<double> contacts_;          // preallocated: max_contacts(m) * CONTACT_STRIDE
+        std::size_t n_contacts_ = 0;
+        std::vector<bool> robot_moving_body_;   // bodies moved by the robot joints (and the bodies after them)
+
         // External wrench (optional input, e.g. mouse perturbations of the viewer)
         mujoco_sim::ExternalWrench external_wrench_;   // latest received wrench (body frame, at the body origin)
         int external_wrench_body_ = -1;                // body to which a wrench is currently applied (-1: none)
@@ -100,6 +105,7 @@ class mujoco_robotsimulator_crospi : public RobotSimulator {
         void compute_measurements();
         void compute_tcp_wrench();
         void apply_external_wrench();
+        void compute_contacts();
         void write_feedback();
 
     public:

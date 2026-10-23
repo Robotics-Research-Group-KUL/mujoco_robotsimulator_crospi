@@ -65,6 +65,10 @@ docs/record_demo.sh '$[crospi_application_template]/applications/application_muj
   to the TCP wrench when the body is on the end effector. `mujoco_viewer.py` publishes the mouse perturbation as an
   explicit spring (`--force-stiffness`, `--torque-stiffness`), NOT MuJoCo's `mjv_applyPerturbForce` (scaled by the
   body mass: ~0.6 N for a 2 cm drag of the 0.29 kg tool, useless against the servo).
+- Contact forces (optional `visualization/contact_topic`): `compute_contacts()` fills a buffer preallocated to
+  `max_contacts(m)` = `m->narena / sizeof(mjContact)` entries of `CONTACT_STRIDE` (8) values (no allocation in the
+  update thread); published with the state. Force shown on the robot's moving bodies, else on the non-static body.
+  The viewer draws them in `user_scn`; they point INTO that body (transparency, key T, needed to see them).
 - `Measurements` (in `ros_publisher.hpp`) is computed once per update by `compute_measurements()` and used both by
   `write_feedback()` (crospi) and the publisher; the `need_*_` flags are the union of feedback and publication needs.
 - `src/test_mujoco_robotsimulator.cpp`, `scripts/mujoco_viewer.py`, `scripts/run_crospi_tasks.py`: test executables.

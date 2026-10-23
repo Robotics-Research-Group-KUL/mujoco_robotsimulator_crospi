@@ -608,6 +608,13 @@
                             "examples": [
                                 0.033
                             ]
+                        },
+                        "contact_topic": {
+                            "description": "Optional. If defined, the contact forces computed by the simulator are published on this topic (std_msgs/Float64MultiArray: [time, number of contacts, then per contact: body on which the force acts, other body, position x y z, force x y z], world frame) together with the state, and drawn as arrows by mujoco_viewer.py (--contact-topic). The force is the one acting on the robot if the contact involves a moving body of the robot, otherwise on the moving body (e.g. a free object).",
+                            "type": "string",
+                            "examples": [
+                                "/mujoco_sim/contacts"
+                            ]
                         }
                     }
                 },

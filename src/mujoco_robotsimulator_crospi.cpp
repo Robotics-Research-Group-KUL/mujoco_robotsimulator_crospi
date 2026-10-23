@@ -151,6 +151,23 @@ void mujoco_robotsimulator_crospi::construct(std::string robot_name,
 
     ros_publisher_ = std::make_unique<mujoco_sim::RosPublisher>(config_, m_);
 
+    if (ros_publisher_->publishes_contacts()) {
+        contacts_.assign(mujoco_sim::max_contacts(m_) * mujoco_sim::CONTACT_STRIDE, 0.0);
+        // Moving bodies of the robot: the bodies of the robot joints and all the bodies after them.
+        robot_moving_body_.assign(m_->nbody, false);
+        for (int j : jnt_id_) {
+            const int joint_body = m_->jnt_bodyid[j];
+            for (int b = 1; b < m_->nbody; ++b) {
+                for (int a = b; a > 0; a = m_->body_parentid[a]) {
+                    if (a == joint_body) {
+                        robot_moving_body_[b] = true;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     std::cout << fmt::format("Constructed MuJoCo robot simulator '{}' (MuJoCo {}): urdf={}, control_mode={}, "
                              "timestep={} s, {} physics steps per update, nq={}, nv={}, nbody={}, ngeom={}",
                              name, mj_versionString(), config_.urdf_path, control_mode_name(config_.control_mode),
@@ -212,7 +229,8 @@ bool mujoco_robotsimulator_crospi::initialize()
 
     compute_measurements();
     write_feedback();
-    ros_publisher_->store(d_, meas_);
+    compute_contacts();
+    ros_publisher_->store(d_, meas_, contacts_, n_contacts_);
     return true;
 }
 
@@ -242,7 +260,8 @@ void mujoco_robotsimulator_crospi::update(volatile std::atomic<bool>& /*stopFlag
 
     compute_measurements();
     write_feedback();
-    ros_publisher_->store(d_, meas_);
+    compute_contacts();
+    ros_publisher_->store(d_, meas_, contacts_, n_contacts_);
 }
 
 void mujoco_robotsimulator_crospi::apply_external_wrench()
@@ -475,6 +494,45 @@ void mujoco_robotsimulator_crospi::compute_tcp_wrench()
     for (int k = 0; k < 3; ++k) {
         meas_.tcp_force[k] = -f_tcp[k];
         meas_.tcp_torque[k] = -t_tcp[k];
+    }
+}
+
+void mujoco_robotsimulator_crospi::compute_contacts()
+{
+    n_contacts_ = 0;
+    if (contacts_.empty()) {
+        return;  // contact forces are not published
+    }
+    const std::size_t capacity = contacts_.size() / mujoco_sim::CONTACT_STRIDE;
+    for (int i = 0; i < d_->ncon && n_contacts_ < capacity; ++i) {
+        const mjContact& c = d_->contact[i];
+        if (c.exclude != 0 || c.efc_address < 0) {
+            continue;  // inactive contact
+        }
+        const int b0 = m_->geom_bodyid[c.geom[0]];
+        const int b1 = m_->geom_bodyid[c.geom[1]];
+        // Body on which the displayed force acts: the robot if involved, otherwise the moving body, otherwise body 1.
+        bool on_b0;
+        if (robot_moving_body_[b0] != robot_moving_body_[b1]) {
+            on_b0 = robot_moving_body_[b0];
+        } else if ((m_->body_weldid[b0] == 0) != (m_->body_weldid[b1] == 0)) {
+            on_b0 = (m_->body_weldid[b1] == 0);
+        } else {
+            on_b0 = false;
+        }
+        // Contact frame -> world: force exerted by geom[0] on geom[1]
+        mjtNum f_contact[6], f_world[3];
+        mj_contactForce(m_, d_, i, f_contact);
+        mju_mulMatTVec3(f_world, c.frame, f_contact);
+        if (on_b0) {
+            mju_scl3(f_world, f_world, -1.0);
+        }
+        double* entry = contacts_.data() + n_contacts_ * mujoco_sim::CONTACT_STRIDE;
+        entry[0] = on_b0 ? b0 : b1;
+        entry[1] = on_b0 ? b1 : b0;
+        std::copy(c.pos, c.pos + 3, entry + 2);
+        std::copy(f_world, f_world + 3, entry + 5);
+        ++n_contacts_;
     }
 }
 

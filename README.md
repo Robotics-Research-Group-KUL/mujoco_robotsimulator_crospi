@@ -66,7 +66,8 @@ tracking error of the position servo with respect to the ideal motion and writes
 # Terminal 1: viewer
 PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
     --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60 \
-    --wrench-topic none --force-stiffness 0 --torque-stiffness 0
+    --wrench-topic /mujoco_sim/external_wrench_mouse_interaction --force-stiffness 200 --torque-stiffness 20 \
+    --contact-topic /mujoco_sim/contacts --contact-arrows per_body_pair --force-arrow-scale 0.025 --force-arrow-width 0.004
 
 # Terminal 2: simulator
 ros2 run mujoco_robotsimulator_crospi test_mujoco_robotsimulator \
@@ -101,7 +102,8 @@ ros2 run crospi_core crospi_node --ros-args \
 # Terminal 2: viewer
 PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
     --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60 \
-    --wrench-topic none --force-stiffness 0 --torque-stiffness 0
+    --wrench-topic /mujoco_sim/external_wrench_mouse_interaction --force-stiffness 200 --torque-stiffness 20 \
+    --contact-topic /mujoco_sim/contacts --contact-arrows per_body_pair --force-arrow-scale 0.025 --force-arrow-width 0.004
 
 # Terminal 3: tasks: move home in joint space, then a Cartesian sine wave along z (runs until Ctrl-C)
 ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py \
@@ -149,11 +151,12 @@ mouse and pull or twist it, while the simulator applies that force in its physic
    ```bash
    PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
        --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60 \
-       --wrench-topic /mujoco_sim/external_wrench_mouse_interaction --force-stiffness 2000 --torque-stiffness 20
+       --wrench-topic /mujoco_sim/external_wrench_mouse_interaction --force-stiffness 200 --torque-stiffness 20 \
+       --contact-topic /mujoco_sim/contacts --contact-arrows per_body_pair --force-arrow-scale 0.025 --force-arrow-width 0.004
    ```
 
-3. In the viewer, **double-click** a body to select it, then **Ctrl + right-drag** to pull it (force = 2000 N/m x
-   drag distance: 1 cm -> 20 N, applied at the grabbed point) or **Ctrl + left-drag** to twist it (torque = 20 Nm/rad
+3. In the viewer, **double-click** a body to select it, then **Ctrl + right-drag** to pull it (force = 200 N/m x
+   drag distance: 10 cm -> 20 N, applied at the grabbed point) or **Ctrl + left-drag** to twist it (torque = 20 Nm/rad
    x twist angle). The force is removed when the mouse is released.
 
 What happens depends on the control mode: with `is-position_servo` the robot deflects like a spring (about force /
@@ -174,6 +177,25 @@ ros2 topic pub -r 50 /mujoco_sim/external_wrench_mouse_interaction geometry_msgs
 
 The latest message is applied until a new one arrives, and removed after `timeout` without messages (publish
 continuously, e.g. `-r 50`). Forces and torques larger than `max_force` / `max_torque` are scaled down.
+
+### Contact force arrows
+
+The viewer draws the contact forces of the simulation as **red arrows** at the contact points, with a length
+proportional to the force (`--force-arrow-scale 0.025`: 10 N -> 25 cm), and the force applied with the mouse as a
+**cyan arrow**. The example setups of `crospi_application_template` publish the contact forces
+(`visualization/contact_topic`: `/mujoco_sim/contacts`); the viewer subscribes to them with `--contact-topic`.
+
+- An arrow shows the force **acting on the robot** (or, for contacts without the robot, on the moving body, e.g. the
+  box resting on the table), so it points into that body: make the moving bodies transparent to see it (in the viewer:
+  **Rendering > Transparent**, or key **T**). The table and walls stay opaque.
+- `--contact-arrows per_body_pair` draws one arrow per pair of bodies in contact (sum of the forces, at the
+  force-weighted mean contact point); `per_contact` draws one arrow per contact point (MuJoCo often uses several
+  points per contact, e.g. 4 for a box on a table).
+- The forces are those computed by the simulator (the same as the TCP wrench). Do not use the contact-force display of
+  the MuJoCo viewer itself (Rendering > Contact Force): the viewer only mirrors the positions, so its own contact forces
+  are not those of the simulation.
+- To disable the arrows, use `--contact-topic none` (and `--wrench-topic none` for the mouse forces; the stiffness and
+  arrow arguments are then ignored but still required).
 
 ---
 
@@ -381,7 +403,7 @@ simulator entry of `ur10e_pick_and_place.setup.json` (in `crospi_application_tem
 | `name_expr_*` | no | Feedback channels to eTaSL (as in `simple_kinematic_simulation`). `name_expr_joint_current` is not supported. |
 | `ros_node_name` | yes | ROS 2 node of the simulator (sensor publication and visualization). |
 | `sensor_publishing` | yes | `topic_namespace`, `publish_period` [s] and the optional list `sensors` (all available sensors if omitted). |
-| `visualization` | no | `model_topic`, `state_topic`, `publish_period` [s] for `mujoco_viewer.py`. |
+| `visualization` | no | `model_topic`, `state_topic`, `publish_period` [s] for `mujoco_viewer.py`, and optionally `contact_topic` (contact forces drawn as arrows, see [Contact force arrows](#contact-force-arrows)). |
 | `external_wrench` | no | `topic`, `timeout` [s], `max_force` [N], `max_torque` [Nm]: external wrench input (e.g. mouse forces of `mujoco_viewer.py`), see [Push the robot with the mouse](#push-the-robot-with-the-mouse). |
 
 The control mode follows the crospi convention of `is-<name>` discriminators: the parameters of a mode are given in
@@ -461,7 +483,7 @@ All arguments are required.
 | Executable | Purpose | Arguments |
 |------------|---------|-----------|
 | `test_mujoco_robotsimulator` | Test a simulator plugin without crospi_node | `--config` setup file, `--simulator-index` entry of `blackboard/robot/robotsimulators`, `--duration` [s], `--amplitude` [rad/s] and `--frequency` [Hz] of `qd(t) = amplitude sin(2π frequency t)` (all joints), `--real-time true\|false` (false: as fast as possible, the real-time factor is reported), `--csv <file>\|none` |
-| `mujoco_viewer.py` | MuJoCo viewer mirroring the running simulation (it does not simulate); optionally sends the forces applied with the mouse to the simulator | `--model-topic`, `--state-topic` (same as `visualization` in the configuration), `--render-rate` [Hz], `--wrench-topic <topic>\|none` (same as `external_wrench/topic`, or `none`), `--force-stiffness` [N/m] and `--torque-stiffness` [Nm/rad] of the mouse spring (see [Push the robot with the mouse](#push-the-robot-with-the-mouse)) |
+| `mujoco_viewer.py` | MuJoCo viewer mirroring the running simulation (it does not simulate); optionally sends the forces applied with the mouse to the simulator | `--model-topic`, `--state-topic` (same as `visualization` in the configuration), `--render-rate` [Hz], `--wrench-topic <topic>\|none` (same as `external_wrench/topic`, or `none`), `--force-stiffness` [N/m] and `--torque-stiffness` [Nm/rad] of the mouse spring (see [Push the robot with the mouse](#push-the-robot-with-the-mouse)), `--contact-topic <topic>\|none` (same as `visualization/contact_topic`, or `none`), `--contact-arrows per_contact\|per_body_pair`, `--force-arrow-scale` [m/N], `--force-arrow-width` [m] (see [Contact force arrows](#contact-force-arrows)) |
 | `run_crospi_tasks.py` | Run a sequence of crospi tasks (BeTFSM) on a running crospi_node | `--task-list` task list file, `--tasks` names in execution order, `--repetitions`, `--tick-frequency` [Hz], `--publish-frequency` [Hz] (BeTFSM status); the BeTFSM web interface is disabled |
 
 - `test_mujoco_robotsimulator` works with any crospi simulator plugin. Its CSV contains the time, setpoints, ideal and
@@ -475,7 +497,8 @@ All arguments are required.
   ```bash
   PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
       --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60 \
-      --wrench-topic none --force-stiffness 0 --torque-stiffness 0
+      --wrench-topic /mujoco_sim/external_wrench_mouse_interaction --force-stiffness 200 --torque-stiffness 20 \
+      --contact-topic /mujoco_sim/contacts --contact-arrows per_body_pair --force-arrow-scale 0.025 --force-arrow-width 0.004
   ```
 
   Why: in a Wayland session, the python `glfw` package (used by the MuJoCo viewer) opens a native Wayland window, and

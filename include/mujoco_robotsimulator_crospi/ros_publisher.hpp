@@ -59,6 +59,17 @@ struct Measurements {
 };
 
 /**
+ * @brief Contact forces published for visualization (visualization/contact_topic), std_msgs/Float64MultiArray:
+ *        [time, number of contacts, then per contact: body on which the force acts, other body, position (x, y, z),
+ *        force (x, y, z)], in the world frame. The force is the one acting on the robot if the contact involves a
+ *        moving body of the robot, otherwise on the moving body (e.g. a free object), otherwise on the second body.
+ */
+inline constexpr std::size_t CONTACT_STRIDE = 8;
+
+/** Maximum number of contacts of a model: contacts are stored in the mjData arena, of size m->narena bytes. */
+inline std::size_t max_contacts(const mjModel* m) { return static_cast<std::size_t>(m->narena) / sizeof(mjContact); }
+
+/**
  * @brief External wrench received on the external_wrench topic: applied to body 'body', expressed in the frame of that
  *        body, with reference point at its origin.
  */
@@ -97,8 +108,15 @@ class RosPublisher {
         RosPublisher(const SimulatorConfig& config, const mjModel* m);
         ~RosPublisher();
 
-        /** Called from the update thread. Never blocks. */
-        void store(const mjData* d, const Measurements& meas) noexcept;
+        /**
+         * Called from the update thread. Never blocks. 'contacts' holds 'n_contacts' entries of CONTACT_STRIDE values
+         * (see CONTACT_STRIDE); it is only used if the contact forces are published.
+         */
+        void store(const mjData* d, const Measurements& meas, const std::vector<double>& contacts,
+                   std::size_t n_contacts) noexcept;
+
+        /** True if the contact forces are published (visualization/contact_topic). */
+        bool publishes_contacts() const { return contact_pub_ != nullptr; }
 
         /**
          * Called from the update thread. Never blocks: returns true and fills 'wrench' if a new message was received
@@ -145,6 +163,8 @@ class RosPublisher {
         rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr state_pub_;
         std_msgs::msg::Float64MultiArray state_msg_;
         rclcpp::TimerBase::SharedPtr visualization_timer_;
+        rclcpp::Publisher<std_msgs::msg::Float64MultiArray>::SharedPtr contact_pub_;
+        std_msgs::msg::Float64MultiArray contact_msg_;
 
         // External wrench
         const mjModel* model_;
@@ -158,6 +178,8 @@ class RosPublisher {
         Measurements meas_buffer_;
         std::vector<double> sensordata_buffer_;
         std::vector<double> qpos_buffer_;   // [time, qpos...]
+        std::vector<double> contacts_buffer_;   // preallocated: max_contacts(m) * CONTACT_STRIDE
+        std::size_t contacts_count_ = 0;
         bool sensors_updated_ = false;
         bool state_updated_ = false;
 

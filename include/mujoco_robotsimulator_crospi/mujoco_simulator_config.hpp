@@ -46,6 +46,7 @@ struct VisualizationConfig {
     std::string model_topic;   ///< Topic (transient local) on which the compiled model is published once as MJB binary
     std::string state_topic;   ///< Topic on which [time, qpos...] is published
     double publish_period;     ///< Period in seconds of the state publication
+    std::optional<std::string> contact_topic;  ///< If set: topic on which the contact forces are published
 };
 
 /**

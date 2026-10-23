@@ -18,6 +18,7 @@
 
 #include "mujoco_robotsimulator_crospi/ros_publisher.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <stdexcept>
 
@@ -168,6 +169,15 @@ RosPublisher::RosPublisher(const SimulatorConfig& config, const mjModel* m)
         dim.size = 1 + m->nq;
         dim.stride = 1 + m->nq;
         state_msg_.layout.dim.push_back(dim);
+        if (vis.contact_topic) {
+            contact_pub_ = node_->create_publisher<std_msgs::msg::Float64MultiArray>(*vis.contact_topic, rclcpp::QoS(1));
+            contacts_buffer_.assign(max_contacts(m) * CONTACT_STRIDE, 0.0);
+            std_msgs::msg::MultiArrayDimension dim;
+            dim.label = "time_ncontacts_then_body_otherbody_px_py_pz_fx_fy_fz";
+            dim.stride = CONTACT_STRIDE;
+            contact_msg_.layout.dim.push_back(dim);
+            RCLCPP_INFO(node_->get_logger(), "Publishing the contact forces on '%s'.", vis.contact_topic->c_str());
+        }
         visualization_timer_ = node_->create_wall_timer(std::chrono::duration<double>(vis.publish_period),
                                                         [this]() { publish_visualization_state(); });
         RCLCPP_INFO(node_->get_logger(), "Publishing the MuJoCo model on '%s' (%ld bytes) and the state on '%s'.",
@@ -228,7 +238,8 @@ std::string RosPublisher::topic(const std::string& relative) const
     return ns.empty() ? relative : ns + "/" + relative;
 }
 
-void RosPublisher::store(const mjData* d, const Measurements& meas) noexcept
+void RosPublisher::store(const mjData* d, const Measurements& meas, const std::vector<double>& contacts,
+                         std::size_t n_contacts) noexcept
 {
     std::unique_lock<std::mutex> lock(buffer_mutex_, std::try_to_lock);
     if (!lock.owns_lock()) {
@@ -240,6 +251,10 @@ void RosPublisher::store(const mjData* d, const Measurements& meas) noexcept
     if (!qpos_buffer_.empty()) {
         qpos_buffer_[0] = d->time;
         std::copy(d->qpos, d->qpos + (qpos_buffer_.size() - 1), qpos_buffer_.begin() + 1);
+        if (contact_pub_) {
+            contacts_count_ = std::min(n_contacts, contacts_buffer_.size() / CONTACT_STRIDE);
+            std::copy(contacts.begin(), contacts.begin() + contacts_count_ * CONTACT_STRIDE, contacts_buffer_.begin());
+        }
         state_updated_ = true;
     }
 }
@@ -347,9 +362,20 @@ void RosPublisher::publish_visualization_state()
             return;
         }
         state_msg_.data = qpos_buffer_;
+        if (contact_pub_) {
+            contact_msg_.data.resize(2 + contacts_count_ * CONTACT_STRIDE);
+            contact_msg_.data[0] = qpos_buffer_[0];
+            contact_msg_.data[1] = static_cast<double>(contacts_count_);
+            std::copy(contacts_buffer_.begin(), contacts_buffer_.begin() + contacts_count_ * CONTACT_STRIDE,
+                      contact_msg_.data.begin() + 2);
+            contact_msg_.layout.dim[0].size = contacts_count_;
+        }
         state_updated_ = false;
     }
     state_pub_->publish(state_msg_);
+    if (contact_pub_) {
+        contact_pub_->publish(contact_msg_);
+    }
 }
 
 } // namespace mujoco_sim
