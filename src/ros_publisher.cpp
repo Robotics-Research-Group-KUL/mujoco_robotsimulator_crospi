@@ -53,6 +53,7 @@ RosPublisher::RosPublisher(const SimulatorConfig& config, const mjModel* m)
     : pub_config_(config.sensor_publishing)
     , base_frame_(config.base_link.value_or(""))
     , tcp_frame_(config.tcp_link.value_or(""))
+    , model_(m)
 {
     if (!rclcpp::ok()) {
         throw std::runtime_error(fmt::format("[{}] The simulator needs an initialized ROS 2 context (rclcpp::init) "
@@ -173,6 +174,21 @@ RosPublisher::RosPublisher(const SimulatorConfig& config, const mjModel* m)
                     vis.model_topic.c_str(), static_cast<long>(size), vis.state_topic.c_str());
     }
 
+    // ---------------------------------------------------------------- external wrench
+    if (config.external_wrench) {
+        try {
+            external_wrench_sub_ = node_->create_subscription<geometry_msgs::msg::WrenchStamped>(
+                config.external_wrench->topic, rclcpp::QoS(10),
+                [this](const geometry_msgs::msg::WrenchStamped::SharedPtr msg) { on_external_wrench(msg); });
+        } catch (const std::exception& e) {
+            throw std::runtime_error(fmt::format("[{}] Could not subscribe to the external wrench topic '{}': {}",
+                                                 PLUGIN_NAME, config.external_wrench->topic, e.what()));
+        }
+        RCLCPP_INFO(node_->get_logger(), "Receiving external wrenches on '%s' (timeout %g s, max. %g N, %g Nm).",
+                    config.external_wrench->topic.c_str(), config.external_wrench->timeout,
+                    config.external_wrench->max_force, config.external_wrench->max_torque);
+    }
+
     executor_ = std::make_shared<rclcpp::executors::SingleThreadedExecutor>();
     executor_->add_node(node_);
     spin_thread_ = std::thread([this]() { executor_->spin(); });
@@ -226,6 +242,36 @@ void RosPublisher::store(const mjData* d, const Measurements& meas) noexcept
         std::copy(d->qpos, d->qpos + (qpos_buffer_.size() - 1), qpos_buffer_.begin() + 1);
         state_updated_ = true;
     }
+}
+
+void RosPublisher::on_external_wrench(const geometry_msgs::msg::WrenchStamped::SharedPtr msg)
+{
+    const int body = mj_name2id(model_, mjOBJ_BODY, msg->header.frame_id.c_str());
+    if (body <= 0) {
+        RCLCPP_WARN_THROTTLE(node_->get_logger(), *node_->get_clock(), 2000,
+                             "External wrench ignored: '%s' (header.frame_id) is not a body of the simulation.",
+                             msg->header.frame_id.c_str());
+        return;
+    }
+    ExternalWrench w;
+    w.body = body;
+    w.force = {msg->wrench.force.x, msg->wrench.force.y, msg->wrench.force.z};
+    w.torque = {msg->wrench.torque.x, msg->wrench.torque.y, msg->wrench.torque.z};
+    w.received = std::chrono::steady_clock::now();
+    std::lock_guard<std::mutex> lock(external_wrench_mutex_);
+    external_wrench_buffer_ = w;
+    external_wrench_updated_ = true;
+}
+
+bool RosPublisher::fetch_external_wrench(ExternalWrench& wrench) noexcept
+{
+    std::unique_lock<std::mutex> lock(external_wrench_mutex_, std::try_to_lock);
+    if (!lock.owns_lock() || !external_wrench_updated_) {
+        return false;
+    }
+    wrench = external_wrench_buffer_;
+    external_wrench_updated_ = false;
+    return true;
 }
 
 void RosPublisher::publish_sensors()

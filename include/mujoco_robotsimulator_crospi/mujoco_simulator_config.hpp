@@ -48,6 +48,17 @@ struct VisualizationConfig {
     double publish_period;     ///< Period in seconds of the state publication
 };
 
+/**
+ * @brief Optional input of an external wrench applied to a body of the simulation (e.g. the mouse perturbations of
+ *        scripts/mujoco_viewer.py, a joystick, ...), received as geometry_msgs/WrenchStamped on a ROS 2 topic.
+ */
+struct ExternalWrenchConfig {
+    std::string topic;         ///< Topic of the geometry_msgs/WrenchStamped messages
+    double timeout;            ///< The wrench is removed if no message is received during this time [s]
+    double max_force;          ///< The force is scaled down to this norm if larger [N]
+    double max_torque;         ///< The torque is scaled down to this norm if larger [Nm]
+};
+
 /** Names of the built-in sensors that can be published (besides the sensors defined in the MJCF environment). */
 inline const char* SENSOR_JOINT_STATE = "joint_state";
 inline const char* SENSOR_TCP_POSE = "tcp_pose";
@@ -142,6 +153,7 @@ struct SimulatorConfig {
     std::string ros_node_name;                      ///< Node created by the simulator for publishing
     SensorPublishingConfig sensor_publishing;
     std::optional<VisualizationConfig> visualization;
+    std::optional<ExternalWrenchConfig> external_wrench;
 
     /** Number of physics steps executed every update() call: periodicity / simulation_timestep */
     int substeps;

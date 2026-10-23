@@ -610,6 +610,50 @@
                             ]
                         }
                     }
+                },
+                "external_wrench": {
+                    "description": "Optional. If defined, the simulator subscribes to an external wrench (geometry_msgs/WrenchStamped) that it applies to a body of the simulation, e.g. the forces applied with the mouse in the viewer (ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py ... --wrench-topic <topic>: double-click a body to select it, then Ctrl + right-drag to pull it, Ctrl + left-drag to twist it), a joystick or any other node. header.frame_id is the name of the body (URDF link or MJCF body) to which the wrench is applied; the wrench is expressed in the frame of that body, with reference point at its origin. The latest wrench is applied during every physics step until a new message arrives; it is removed when no message is received during 'timeout'. In the kinematic mode, wrenches applied to the robot have no effect on its motion (but act on the other bodies). A wrench applied to the end effector (tcp_link and the links after it) is included in the TCP wrench (cartesian_wrench / tcp_wrench), as measured by a real force/torque sensor.",
+                    "type": "object",
+                    "required": [
+                        "topic",
+                        "timeout",
+                        "max_force",
+                        "max_torque"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                        "topic": {
+                            "description": "Topic of the geometry_msgs/WrenchStamped messages.",
+                            "type": "string",
+                            "examples": [
+                                "/mujoco_sim/external_wrench_mouse_interaction"
+                            ]
+                        },
+                        "timeout": {
+                            "description": "The wrench is removed if no new message is received during this time [s] (safety: e.g. when the publisher stops).",
+                            "type": "number",
+                            "exclusiveMinimum": 0,
+                            "examples": [
+                                0.2
+                            ]
+                        },
+                        "max_force": {
+                            "description": "Maximum norm of the applied force [N]: larger forces are scaled down to this norm.",
+                            "type": "number",
+                            "minimum": 0,
+                            "examples": [
+                                100.0
+                            ]
+                        },
+                        "max_torque": {
+                            "description": "Maximum norm of the applied torque [Nm]: larger torques are scaled down to this norm.",
+                            "type": "number",
+                            "minimum": 0,
+                            "examples": [
+                                20.0
+                            ]
+                        }
+                    }
                 }
             },
             "not": {

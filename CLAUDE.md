@@ -59,6 +59,12 @@ docs/record_demo.sh '$[crospi_application_template]/applications/application_muj
   the sensors (`sensor_publishing`, standard msgs, one timer) and optionally the visualization (model as MJB,
   transient local; state `[time, qpos...]`). The update thread passes `Measurements` + `sensordata` + `qpos` through
   a `try_lock`ed buffer (never blocks).
+- External wrench (optional `external_wrench`): `RosPublisher` subscribes to `geometry_msgs/WrenchStamped` (frame_id =
+  body name, wrench in that body frame at its origin); `apply_external_wrench()` writes `xfrc_applied` (world, torque
+  about the COM) before the physics steps, clears it after `timeout`, clamps to `max_force`/`max_torque`; it is added
+  to the TCP wrench when the body is on the end effector. `mujoco_viewer.py` publishes the mouse perturbation as an
+  explicit spring (`--force-stiffness`, `--torque-stiffness`), NOT MuJoCo's `mjv_applyPerturbForce` (scaled by the
+  body mass: ~0.6 N for a 2 cm drag of the 0.29 kg tool, useless against the servo).
 - `Measurements` (in `ros_publisher.hpp`) is computed once per update by `compute_measurements()` and used both by
   `write_feedback()` (crospi) and the publisher; the `need_*_` flags are the union of feedback and publication needs.
 - `src/test_mujoco_robotsimulator.cpp`, `scripts/mujoco_viewer.py`, `scripts/run_crospi_tasks.py`: test executables.

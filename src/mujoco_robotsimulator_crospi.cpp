@@ -20,6 +20,7 @@
 #include "mujoco_robotsimulator_crospi/mujoco_scene_builder.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <iostream>
 #include <set>
 #include <stdexcept>
@@ -188,6 +189,8 @@ void mujoco_robotsimulator_crospi::reset_state()
         qvel_prev_[i] = 0.0;
     }
     std::fill(setpoint_joint_vel_.data.begin(), setpoint_joint_vel_.data.end(), 0.0f);
+    external_wrench_ = mujoco_sim::ExternalWrench{};
+    external_wrench_body_ = -1;
     mj_forward(m_, d_);
 }
 
@@ -227,6 +230,10 @@ void mujoco_robotsimulator_crospi::update(volatile std::atomic<bool>& /*stopFlag
         }
     }
 
+    if (config_.external_wrench) {
+        apply_external_wrench();
+    }
+
     if (config_.control_mode == mujoco_sim::ControlMode::KINEMATIC) {
         step_kinematic();
     } else {
@@ -236,6 +243,54 @@ void mujoco_robotsimulator_crospi::update(volatile std::atomic<bool>& /*stopFlag
     compute_measurements();
     write_feedback();
     ros_publisher_->store(d_, meas_);
+}
+
+void mujoco_robotsimulator_crospi::apply_external_wrench()
+{
+    // Latest wrench received on external_wrench/topic (body frame, reference point at the body origin).
+    mujoco_sim::ExternalWrench received;
+    if (ros_publisher_->fetch_external_wrench(received)) {
+        external_wrench_ = received;
+    }
+
+    // Remove the wrench applied during the previous update.
+    if (external_wrench_body_ >= 0) {
+        mju_zero(d_->xfrc_applied + 6 * external_wrench_body_, 6);
+        external_wrench_body_ = -1;
+    }
+
+    const double age = std::chrono::duration<double>(std::chrono::steady_clock::now() - external_wrench_.received).count();
+    if (external_wrench_.body <= 0 || age > config_.external_wrench->timeout) {
+        return;  // no wrench, or too old (e.g. the publisher stopped)
+    }
+
+    // Limit the norms of the force and torque.
+    mjtNum f_body[3], t_body[3];
+    std::copy(external_wrench_.force.begin(), external_wrench_.force.end(), f_body);
+    std::copy(external_wrench_.torque.begin(), external_wrench_.torque.end(), t_body);
+    const mjtNum f_norm = mju_norm3(f_body);
+    const mjtNum t_norm = mju_norm3(t_body);
+    if (f_norm > config_.external_wrench->max_force) {
+        mju_scl3(f_body, f_body, config_.external_wrench->max_force / f_norm);
+    }
+    if (t_norm > config_.external_wrench->max_torque) {
+        mju_scl3(t_body, t_body, config_.external_wrench->max_torque / t_norm);
+    }
+
+    // Body frame -> world orientation, then MuJoCo convention of xfrc_applied: torque about the center of mass.
+    const int b = external_wrench_.body;
+    mjtNum f_world[3], t_world[3], com_to_origin[3], moment[3];
+    mju_mulMatVec3(f_world, d_->xmat + 9 * b, f_body);
+    mju_mulMatVec3(t_world, d_->xmat + 9 * b, t_body);
+    mju_sub3(com_to_origin, d_->xpos + 3 * b, d_->xipos + 3 * b);
+    mju_cross(moment, com_to_origin, f_world);
+    mjtNum* xfrc = d_->xfrc_applied + 6 * b;
+    mju_copy3(xfrc, f_world);
+    mju_add3(xfrc + 3, t_world, moment);
+
+    external_wrench_body_ = b;
+    copy3(external_force_world_, f_world);
+    copy3(external_torque_world_, t_world);
 }
 
 void mujoco_robotsimulator_crospi::step_kinematic()
@@ -399,6 +454,17 @@ void mujoco_robotsimulator_crospi::compute_tcp_wrench()
         for (int k = 0; k < 3; ++k) {
             force_env[k] += sign * f_world[k];
             torque_env[k] += sign * (t_world[k] + r_cross_f[k]);
+        }
+    }
+    // External wrench applied to the end effector (e.g. a user pushing the tool): measured as well, as by a real
+    // force/torque sensor between the robot and the tool.
+    if (external_wrench_body_ >= 0 && end_effector_body_[external_wrench_body_]) {
+        mjtNum r[3], r_cross_f[3];
+        mju_sub3(r, d_->xpos + 3 * external_wrench_body_, p_t);
+        mju_cross(r_cross_f, r, external_force_world_.data());
+        for (int k = 0; k < 3; ++k) {
+            force_env[k] += external_force_world_[k];
+            torque_env[k] += external_torque_world_[k] + r_cross_f[k];
         }
     }
     // Reported: wrench exerted by the end effector on the environment, expressed in tcp_link.

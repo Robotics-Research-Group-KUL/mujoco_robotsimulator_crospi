@@ -65,7 +65,8 @@ tracking error of the position servo with respect to the ideal motion and writes
 ```bash
 # Terminal 1: viewer
 PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
-    --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60
+    --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60 \
+    --wrench-topic none --force-stiffness 0 --torque-stiffness 0
 
 # Terminal 2: simulator
 ros2 run mujoco_robotsimulator_crospi test_mujoco_robotsimulator \
@@ -99,7 +100,8 @@ ros2 run crospi_core crospi_node --ros-args \
 
 # Terminal 2: viewer
 PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
-    --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60
+    --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60 \
+    --wrench-topic none --force-stiffness 0 --torque-stiffness 0
 
 # Terminal 3: tasks: move home in joint space, then a Cartesian sine wave along z (runs until Ctrl-C)
 ros2 run mujoco_robotsimulator_crospi run_crospi_tasks.py \
@@ -123,6 +125,55 @@ ros2 run plotjuggler plotjuggler   # Streaming: ROS2 Topic Subscriber -> select 
 For instance, plot `/mujoco_sim/sensors/joint_states/effort` (joint torques) or `/mujoco_sim/sensors/tcp_wrench`
 (contact wrench of the tool: zero in free space). With the environments that define MuJoCo sensors, they are
 published on `/mujoco_sim/sensors/mujoco_sensors/<name>` (e.g. `table_touch`, `contour_touch`).
+
+### Push the robot with the mouse
+
+The viewer can send forces to the simulation: grab a body of the robot (or an object of the environment) with the
+mouse and pull or twist it, while the simulator applies that force in its physics.
+
+1. Enable the external wrench input in the simulator entry of the setup file (it is disabled when omitted). All the
+   example setups of `crospi_application_template` (`applications/application_mujoco_examples_ur10e/`) already
+   contain it, with the F/T sensor at `tool0` (`tcp_link`, `name_expr_cartesian_wrench`, `tcp_wrench` published):
+
+   ```json
+   "external_wrench": {
+       "topic": "/mujoco_sim/external_wrench_mouse_interaction",
+       "timeout": 0.2,
+       "max_force": 100.0,
+       "max_torque": 20.0
+   }
+   ```
+
+2. Start the viewer with the same topic and the stiffness of the mouse spring:
+
+   ```bash
+   PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
+       --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60 \
+       --wrench-topic /mujoco_sim/external_wrench_mouse_interaction --force-stiffness 2000 --torque-stiffness 20
+   ```
+
+3. In the viewer, **double-click** a body to select it, then **Ctrl + right-drag** to pull it (force = 2000 N/m x
+   drag distance: 1 cm -> 20 N, applied at the grabbed point) or **Ctrl + left-drag** to twist it (torque = 20 Nm/rad
+   x twist angle). The force is removed when the mouse is released.
+
+What happens depends on the control mode: with `is-position_servo` the robot deflects like a spring (about force /
+stiffness of the joint controller) and comes back when released; with `is-velocity_servo` it drifts while pushed; with
+`is-kinematic` the robot does not move (its motion is imposed), but free objects (e.g. the box of the pick-and-place
+environment) are pushed. A force applied to the end effector (`tcp_link` and the links after it, e.g. the tool) is
+measured by the force/torque sensor (`tcp_wrench` / `cartesian_wrench`), so an eTaSL task with force feedback (e.g.
+an admittance controller) reacts to it: the robot can be guided by hand.
+
+The input is a plain `geometry_msgs/WrenchStamped` topic, so any node can push the simulated robot (joystick, script,
+...): `header.frame_id` is the name of the body (URDF link or MJCF body), the wrench is expressed in the frame of that
+body with reference point at its origin. For example, 20 N along the axis of the cylindrical tool:
+
+```bash
+ros2 topic pub -r 50 /mujoco_sim/external_wrench_mouse_interaction geometry_msgs/msg/WrenchStamped \
+    "{header: {frame_id: cylinder_tool}, wrench: {force: {x: 0.0, y: 0.0, z: 20.0}}}"
+```
+
+The latest message is applied until a new one arrives, and removed after `timeout` without messages (publish
+continuously, e.g. `-r 50`). Forces and torques larger than `max_force` / `max_torque` are scaled down.
 
 ---
 
@@ -253,7 +304,9 @@ e.g. `wrist_3_link`, `flange`, `ft_frame` and `tool0` of a UR robot) plus all th
 moved to the origin of `tcp_link`. Its sign is the wrench that the end effector **exerts on the environment**: e.g.
 with `tcp_link = tool0` pointing down, pressing on a table gives a positive force along the z axis of `tool0`. It is
 zero without contact and contains no gravity or inertia of the links (as an ideally compensated force/torque sensor).
-In the kinematic mode, the contact forces are those consistent with the imposed motion.
+In the kinematic mode, the contact forces are those consistent with the imposed motion. An external wrench applied
+to the end effector (`external_wrench`, e.g. pushing the tool with the mouse) is included as well, with the same sign
+convention: pushing the tool along its +z axis with 20 N gives -20 N along z of `tool0`.
 
 `base_link` and `tcp_link` are required as soon as a quantity that uses them is fed back or published.
 
@@ -329,6 +382,7 @@ simulator entry of `ur10e_pick_and_place.setup.json` (in `crospi_application_tem
 | `ros_node_name` | yes | ROS 2 node of the simulator (sensor publication and visualization). |
 | `sensor_publishing` | yes | `topic_namespace`, `publish_period` [s] and the optional list `sensors` (all available sensors if omitted). |
 | `visualization` | no | `model_topic`, `state_topic`, `publish_period` [s] for `mujoco_viewer.py`. |
+| `external_wrench` | no | `topic`, `timeout` [s], `max_force` [N], `max_torque` [Nm]: external wrench input (e.g. mouse forces of `mujoco_viewer.py`), see [Push the robot with the mouse](#push-the-robot-with-the-mouse). |
 
 The control mode follows the crospi convention of `is-<name>` discriminators: the parameters of a mode are given in
 the `control_mode` object together with its `is-<mode>` key, and the JSON schema only offers (autocompletion) and
@@ -407,7 +461,7 @@ All arguments are required.
 | Executable | Purpose | Arguments |
 |------------|---------|-----------|
 | `test_mujoco_robotsimulator` | Test a simulator plugin without crospi_node | `--config` setup file, `--simulator-index` entry of `blackboard/robot/robotsimulators`, `--duration` [s], `--amplitude` [rad/s] and `--frequency` [Hz] of `qd(t) = amplitude sin(2π frequency t)` (all joints), `--real-time true\|false` (false: as fast as possible, the real-time factor is reported), `--csv <file>\|none` |
-| `mujoco_viewer.py` | MuJoCo viewer mirroring the running simulation (it does not simulate) | `--model-topic`, `--state-topic` (same as `visualization` in the configuration), `--render-rate` [Hz] |
+| `mujoco_viewer.py` | MuJoCo viewer mirroring the running simulation (it does not simulate); optionally sends the forces applied with the mouse to the simulator | `--model-topic`, `--state-topic` (same as `visualization` in the configuration), `--render-rate` [Hz], `--wrench-topic <topic>\|none` (same as `external_wrench/topic`, or `none`), `--force-stiffness` [N/m] and `--torque-stiffness` [Nm/rad] of the mouse spring (see [Push the robot with the mouse](#push-the-robot-with-the-mouse)) |
 | `run_crospi_tasks.py` | Run a sequence of crospi tasks (BeTFSM) on a running crospi_node | `--task-list` task list file, `--tasks` names in execution order, `--repetitions`, `--tick-frequency` [Hz], `--publish-frequency` [Hz] (BeTFSM status); the BeTFSM web interface is disabled |
 
 - `test_mujoco_robotsimulator` works with any crospi simulator plugin. Its CSV contains the time, setpoints, ideal and
@@ -420,7 +474,8 @@ All arguments are required.
 
   ```bash
   PYGLFW_LIBRARY_VARIANT=x11 ros2 run mujoco_robotsimulator_crospi mujoco_viewer.py \
-      --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60
+      --model-topic /mujoco_sim/model --state-topic /mujoco_sim/state --render-rate 60 \
+      --wrench-topic none --force-stiffness 0 --torque-stiffness 0
   ```
 
   Why: in a Wayland session, the python `glfw` package (used by the MuJoCo viewer) opens a native Wayland window, and

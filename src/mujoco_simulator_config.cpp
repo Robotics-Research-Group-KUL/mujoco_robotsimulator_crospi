@@ -364,6 +364,28 @@ SimulatorConfig parse_config(const Json::Value& config, std::shared_ptr<etasl::J
         c.visualization = vis;
     }
 
+    if (config.isMember("external_wrench")) {
+        const Json::Value& w = config["external_wrench"];
+        if (!w.isObject()) {
+            fail("parameter 'external_wrench' must be an object.");
+        }
+        for (const auto& key : w.getMemberNames()) {
+            if (key != "topic" && key != "timeout" && key != "max_force" && key != "max_torque") {
+                fail(fmt::format("unknown parameter 'external_wrench/{}'.", key));
+            }
+        }
+        ExternalWrenchConfig ext;
+        ext.topic = read_string(w, "topic");
+        ext.timeout = read_number(require(w, "timeout"), "external_wrench/timeout");
+        ext.max_force = read_number(require(w, "max_force"), "external_wrench/max_force");
+        ext.max_torque = read_number(require(w, "max_torque"), "external_wrench/max_torque");
+        if (ext.timeout <= 0.0 || ext.max_force < 0.0 || ext.max_torque < 0.0) {
+            fail("parameter 'external_wrench/timeout' must be strictly positive and 'external_wrench/max_force', "
+                 "'external_wrench/max_torque' must be non-negative.");
+        }
+        c.external_wrench = ext;
+    }
+
     return c;
 }
 
